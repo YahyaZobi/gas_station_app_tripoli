@@ -1,0 +1,151 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e5]: Tripoli MVP
+      - heading "Fuel Finder Libya" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Find fuel faster, avoid long queues, and send quick station updates.
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - text: Live window
+        - strong [ref=e10]: Last 60 minutes
+      - generic [ref=e11]:
+        - text: Coverage
+        - strong [ref=e12]: Tripoli stations
+  - main [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - paragraph [ref=e17]: Map View
+          - heading "Nearby Stations" [level=2] [ref=e18]
+        - paragraph [ref=e19]: Tap a marker or station card to report quickly.
+      - generic "Station status legend" [ref=e20]:
+        - generic [ref=e21]: Fuel available
+        - generic [ref=e23]: Available but crowded
+        - generic [ref=e25]: No fuel
+        - generic [ref=e27]: Unknown
+      - generic [ref=e29]:
+        - generic [ref=e31]: Tripoli
+        - generic [ref=e32]: Airport Road
+        - generic [ref=e33]: Tajoura side
+        - generic [ref=e34]: Janzour side
+        - generic "Tripoli station map" [ref=e35]:
+          - 'button "Al Siyahi Station: Fuel available" [ref=e36] [cursor=pointer]':
+            - generic [ref=e37]: Al Siyahi Station
+          - 'button "Bab Ben Ghashir Service: No fuel" [ref=e38] [cursor=pointer]':
+            - generic [ref=e39]: Bab Ben Ghashir Service
+          - 'button "Gargaresh Fuel Point: Available but crowded" [ref=e40] [cursor=pointer]':
+            - generic [ref=e41]: Gargaresh Fuel Point
+          - 'button "Airport Road Fuel Hub: Unknown" [ref=e42] [cursor=pointer]':
+            - generic [ref=e43]: Airport Road Fuel Hub
+          - 'button "Salah Al Din Station: Available but crowded" [ref=e44] [cursor=pointer]':
+            - generic [ref=e45]: Salah Al Din Station
+          - 'button "Tajoura Coast Station: Unknown" [ref=e46] [cursor=pointer]':
+            - generic [ref=e47]: Tajoura Coast Station
+      - status [ref=e48]: Using central Tripoli as your location.
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - paragraph [ref=e52]: Station Details
+          - heading "Al Siyahi Station" [level=2] [ref=e53]
+        - generic [ref=e54]: Fuel available
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - generic [ref=e57]:
+            - term [ref=e58]: Distance
+            - definition [ref=e59]: 3.1 km
+          - generic [ref=e60]:
+            - term [ref=e61]: Queue
+            - definition [ref=e62]: Short
+          - generic [ref=e63]:
+            - term [ref=e64]: Last Update
+            - definition [ref=e65]: 8 mins ago
+          - generic [ref=e66]:
+            - term [ref=e67]: Recent Reports
+            - definition [ref=e68]: 2 in last 60 mins
+        - generic [ref=e69]:
+          - generic [ref=e70]:
+            - paragraph [ref=e71]: Quick Report
+            - heading "Update this station" [level=3] [ref=e72]
+            - paragraph [ref=e73]: Your report is timestamped and affects the station status for the next 60 minutes.
+          - generic [ref=e74]:
+            - group "Fuel availability" [ref=e75]:
+              - generic [ref=e76]: Fuel availability
+              - generic [ref=e77] [cursor=pointer]:
+                - radio "Fuel available" [checked] [ref=e78]
+                - generic [ref=e79]: Fuel available
+              - generic [ref=e80] [cursor=pointer]:
+                - radio "No fuel" [ref=e81]
+                - generic [ref=e82]: No fuel
+            - group "Queue level" [ref=e83]:
+              - generic [ref=e84]: Queue level
+              - generic [ref=e85] [cursor=pointer]:
+                - radio "Short" [checked] [ref=e86]
+                - generic [ref=e87]: Short
+              - generic [ref=e88] [cursor=pointer]:
+                - radio "Medium" [ref=e89]
+                - generic [ref=e90]: Medium
+              - generic [ref=e91] [cursor=pointer]:
+                - radio "Long" [ref=e92]
+                - generic [ref=e93]: Long
+            - button "Submit report" [ref=e94] [cursor=pointer]
+    - generic [ref=e95]:
+      - generic [ref=e96]:
+        - generic [ref=e97]:
+          - paragraph [ref=e98]: Station List
+          - heading "Tripoli Stations" [level=2] [ref=e99]
+        - paragraph [ref=e100]: 6 stations, sorted by distance
+      - generic [ref=e101]:
+        - 'button "Al Siyahi Station 3.1 km away Fuel available Queue: Short 8 mins ago" [ref=e102] [cursor=pointer]':
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - heading "Al Siyahi Station" [level=3] [ref=e105]
+              - paragraph [ref=e106]: 3.1 km away
+            - generic [ref=e107]: Fuel available
+          - generic [ref=e108]:
+            - generic [ref=e109]: "Queue: Short"
+            - generic [ref=e110]: 8 mins ago
+        - 'button "Bab Ben Ghashir Service 3.6 km away No fuel Queue: Long 10 mins ago" [ref=e111] [cursor=pointer]':
+          - generic [ref=e112]:
+            - generic [ref=e113]:
+              - heading "Bab Ben Ghashir Service" [level=3] [ref=e114]
+              - paragraph [ref=e115]: 3.6 km away
+            - generic [ref=e116]: No fuel
+          - generic [ref=e117]:
+            - generic [ref=e118]: "Queue: Long"
+            - generic [ref=e119]: 10 mins ago
+        - 'button "Gargaresh Fuel Point 5.5 km away Available but crowded Queue: Long 12 mins ago" [ref=e120] [cursor=pointer]':
+          - generic [ref=e121]:
+            - generic [ref=e122]:
+              - heading "Gargaresh Fuel Point" [level=3] [ref=e123]
+              - paragraph [ref=e124]: 5.5 km away
+            - generic [ref=e125]: Available but crowded
+          - generic [ref=e126]:
+            - generic [ref=e127]: "Queue: Long"
+            - generic [ref=e128]: 12 mins ago
+        - 'button "Airport Road Fuel Hub 6.1 km away Unknown Queue: Unknown No recent reports" [ref=e129] [cursor=pointer]':
+          - generic [ref=e130]:
+            - generic [ref=e131]:
+              - heading "Airport Road Fuel Hub" [level=3] [ref=e132]
+              - paragraph [ref=e133]: 6.1 km away
+            - generic [ref=e134]: Unknown
+          - generic [ref=e135]:
+            - generic [ref=e136]: "Queue: Unknown"
+            - generic [ref=e137]: No recent reports
+        - 'button "Salah Al Din Station 7.8 km away Available but crowded Queue: Long 6 mins ago" [ref=e138] [cursor=pointer]':
+          - generic [ref=e139]:
+            - generic [ref=e140]:
+              - heading "Salah Al Din Station" [level=3] [ref=e141]
+              - paragraph [ref=e142]: 7.8 km away
+            - generic [ref=e143]: Available but crowded
+          - generic [ref=e144]:
+            - generic [ref=e145]: "Queue: Long"
+            - generic [ref=e146]: 6 mins ago
+        - 'button "Tajoura Coast Station 13.6 km away Unknown Queue: Unknown No recent reports" [ref=e147] [cursor=pointer]':
+          - generic [ref=e148]:
+            - generic [ref=e149]:
+              - heading "Tajoura Coast Station" [level=3] [ref=e150]
+              - paragraph [ref=e151]: 13.6 km away
+            - generic [ref=e152]: Unknown
+          - generic [ref=e153]:
+            - generic [ref=e154]: "Queue: Unknown"
+            - generic [ref=e155]: No recent reports
