@@ -28,13 +28,13 @@ export const STATUS_META = {
     markerColor: "#DC4C3F",
   },
   uncertain: {
-    label: "مسكر",
-    shortLabel: "مسكر",
+    label: "طابور خفيف",
+    shortLabel: "طابور خفيف",
     className: "status-uncertain",
     markerColor: "#182433",
   },
   unknown: {
-    label: "مسكر",
+    label: "طابور خفيف",
     className: "status-unknown",
     markerColor: "#9CA3AF",
   },
@@ -48,8 +48,8 @@ export const QUEUE_LABELS = {
 };
 
 export const ACTIVITY_LABELS = {
-  unknown: "مسكر",
-  low: "إشارات قليلة",
+  unknown: "طابور خفيف",
+  low: "طابور خفيف",
   likely_available: "طابور خفيف",
   busy: "زحمة",
 };
@@ -486,18 +486,18 @@ export function computeStationStatus({
   }
 
   if (!hasRecentPresenceData && recentReports.length === 0) {
+    return "unknown";
+  }
+
+  if (activeDevices > 8) {
     return "busy";
   }
 
-  if (activeDevices === 0) {
-    return "no_fuel";
-  }
-
-  if (activeDevices <= 8) {
+  if (hasRecentPresenceData && activeDevices > 0) {
     return "available";
   }
 
-  return "busy";
+  return "unknown";
 }
 
 export function summarizeStationPresence(presenceRows, now = new Date()) {
@@ -530,11 +530,11 @@ export function summarizeStationPresence(presenceRows, now = new Date()) {
 
 export function getPresenceDrivenStatus(activeDevices, hasRecentPresenceData) {
   if (!hasRecentPresenceData) {
-    return "زحمة";
+    return "طابور خفيف";
   }
 
   if (activeDevices === 0) {
-    return "مسكر";
+    return "طابور خفيف";
   }
 
   if (activeDevices <= 3) {
@@ -589,11 +589,15 @@ export function buildStationSections(
     .filter(isReliableBestStation)
     .sort(compareBestStationCandidates);
   const bestStation = reliableStations[0] ?? null;
+  const backupStation = bestStation ? reliableStations[1] ?? null : null;
   const rankedListCandidates = sortStationsForDiscovery(listCandidates);
   const fallbackStations = rankedStations
     .slice(0, listLimit)
-    .filter((station, index, array) => array.findIndex((item) => item.id === station.id) === index);
-  const nearbyPool = rankedListCandidates.filter((station) => station.id !== bestStation?.id);
+    .filter((station, index, array) => array.findIndex((item) => item.id === station.id) === index)
+    .filter((station) => station.id !== bestStation?.id && station.id !== backupStation?.id);
+  const nearbyPool = rankedListCandidates.filter(
+    (station) => station.id !== bestStation?.id && station.id !== backupStation?.id,
+  );
   const visibleNearbyStations = (nearbyPool.length ? nearbyPool : fallbackStations)
     .slice(0, listLimit)
     .map((station, index) => ({
@@ -602,7 +606,12 @@ export function buildStationSections(
     }));
   const recommendedIds = new Set(visibleNearbyStations.map((station) => station.id));
   const nearbyStations = rankedListCandidates
-    .filter((station) => station.id !== bestStation?.id && !recommendedIds.has(station.id))
+    .filter(
+      (station) =>
+        station.id !== bestStation?.id &&
+        station.id !== backupStation?.id &&
+        !recommendedIds.has(station.id),
+    )
     .map((station) => ({
       ...station,
       recommendationBadge: "خيار جيد",
@@ -610,6 +619,7 @@ export function buildStationSections(
 
   return {
     bestStation,
+    backupStation,
     recommendedStations: visibleNearbyStations,
     nearbyStations,
     avoidStations: [],

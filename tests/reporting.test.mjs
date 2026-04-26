@@ -63,7 +63,7 @@ const station = {
   longitude: 13.19,
 };
 
-test("falls back to busy when there are no recent reports or presence signals", () => {
+test("falls back to unknown when there are no recent reports or presence signals", () => {
   const now = new Date("2026-04-24T12:00:00.000Z");
   const reports = [
     {
@@ -77,7 +77,7 @@ test("falls back to busy when there are no recent reports or presence signals", 
 
   const result = aggregateStation(station, reports, now);
 
-  assert.equal(result.status, "busy");
+  assert.equal(result.status, "unknown");
   assert.equal(result.queueLevel, "unknown");
   assert.equal(result.recentReportsCount, 0);
   assert.equal(result.hasFreshSignal, false);
@@ -162,11 +162,11 @@ test("active devices >= 10 return busy even if reports are weak", () => {
 });
 
 test("presence-driven thresholds map active devices into believable statuses", () => {
-  assert.equal(getPresenceDrivenStatus(0, true), "مسكر");
+  assert.equal(getPresenceDrivenStatus(0, true), "طابور خفيف");
   assert.equal(getPresenceDrivenStatus(2, true), "عالبومبة طول");
   assert.equal(getPresenceDrivenStatus(8, true), "طابور خفيف");
   assert.equal(getPresenceDrivenStatus(12, true), "زحمة");
-  assert.equal(getPresenceDrivenStatus(0, false), "زحمة");
+  assert.equal(getPresenceDrivenStatus(0, false), "طابور خفيف");
 });
 
 test("aggregateStation uses passive presence and reports together for busy stations", () => {
@@ -230,7 +230,7 @@ test("reports older than 60 minutes get zero weight and are ignored", () => {
   assert.equal(getReportWeight(staleReport, now), 0);
 });
 
-test("station with signals older than 60 minutes falls back to busy", () => {
+test("station with signals older than 60 minutes falls back to unknown", () => {
   const now = new Date("2026-04-24T12:00:00.000Z");
   const result = projectStations(
     [station],
@@ -253,7 +253,7 @@ test("station with signals older than 60 minutes falls back to busy", () => {
     now,
   )[0];
 
-  assert.equal(result.status, "busy");
+  assert.equal(result.status, "unknown");
   assert.equal(result.hasFreshSignal, false);
   assert.equal(result.lastUpdated, null);
 });
@@ -279,7 +279,7 @@ test("recent presence signal updates lastUpdated and trust fields", () => {
 
   assert.equal(result.lastUpdated, "2026-04-24T11:58:00.000Z");
   assert.equal(result.activeDevices, 2);
-  assert.equal(result.activityLabel, "إشارات قليلة");
+  assert.equal(result.activityLabel, "طابور خفيف");
   assert.equal(result.hasFreshSignal, true);
   assert.equal(result.status, "available");
   assert.equal(getDisplayStatus(result), "عالبومبة طول");
@@ -567,7 +567,8 @@ test("station sections prioritize top available stations and keep crowded or clo
   ]);
 
   assert.equal(sections.bestStation?.id, "1");
-  assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["4", "2", "3", "5"]);
+  assert.equal(sections.backupStation?.id, "2");
+  assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["4", "3", "5"]);
   assert.deepEqual(sections.nearbyStations.map((station) => station.id), []);
   assert.deepEqual(sections.avoidStations.map((station) => station.id), []);
 });
@@ -580,6 +581,7 @@ test("station sections can promote likely available activity signals when no ava
   ]);
 
   assert.equal(sections.bestStation?.id, "1");
+  assert.equal(sections.backupStation, null);
   assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["3", "2"]);
   assert.deepEqual(sections.nearbyStations.map((station) => station.id), []);
 });
@@ -618,6 +620,7 @@ test("best station prioritizes availability then distance then recency", () => {
 test("decision-first layout shows hero, backup, then nearby stations without duplication", () => {
   const layout = buildDecisionFirstLayout({
     bestStation: { id: "hero" },
+    backupStation: { id: "r2" },
     recommendedStations: [{ id: "hero" }, { id: "r2" }, { id: "r3" }],
     nearbyStations: [{ id: "n1" }, { id: "n2" }, { id: "n3" }, { id: "n4" }, { id: "n5" }],
     avoidStations: [{ id: "x1" }, { id: "x2" }],
@@ -1247,7 +1250,7 @@ test("home screen uses best and backup section labels", () => {
   const source = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
   assert.match(source, /الأفضل الآن/);
-  assert.match(source, /خيار احتياطي/);
+  assert.match(source, /الخيار الثاني/);
   assert.match(source, /محطات قريبة أخرى/);
 });
 

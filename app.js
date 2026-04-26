@@ -472,6 +472,7 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
 
   const layout = buildDecisionFirstLayout({
     bestStation,
+    backupStation: stationSections.backupStation,
     recommendedStations,
     nearbyStations,
     avoidStations,
@@ -587,8 +588,8 @@ function createBackupSection(station, template) {
   header.className = "station-group-header";
   header.innerHTML = `
     <div>
-      <p class="section-label">خيار احتياطي</p>
-      <h3 class="station-group-title">خيار احتياطي</h3>
+      <p class="section-label">الخيار الثاني</p>
+      <h3 class="station-group-title">الخيار الثاني</h3>
     </div>
   `;
   section.append(header);
@@ -966,7 +967,7 @@ function getStationActivityText(station) {
     return "مسكر";
   }
 
-  return "مسكر";
+  return "طابور خفيف";
 }
 
 function getDriverFlowLabel(station) {
