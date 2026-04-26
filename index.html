@@ -29,7 +29,7 @@
         <div class="phone-screen">
           <div class="app-shell">
             <main class="app-content">
-              <header class="hero">
+              <header class="hero hidden" hidden aria-hidden="true">
                 <p class="eyebrow">نسخة أولية للموبايل</p>
                 <h1>أقرب المحطات</h1>
               </header>
@@ -68,7 +68,7 @@
                 </section>
 
                 <section class="panel list-panel">
-                <div class="panel-heading">
+                <div class="panel-heading" id="list-panel-heading">
                   <div>
                     <h2 id="screen-title">أقرب المحطات</h2>
                   </div>
@@ -96,6 +96,14 @@
                 <div id="station-list" class="station-list" aria-live="polite"></div>
                 <div id="list-empty" class="empty-state hidden">لا توجد محطات متاحة حالياً.</div>
                 <button type="button" class="secondary-button hidden" id="show-more-button">عرض المزيد</button>
+                <div class="info-notice" id="home-info-notice">
+                  <span class="info-notice-icon" aria-hidden="true">i</span>
+                  <p>
+                    المعلومات تعتمد على إشارات المستخدمين
+                    <br />
+                    قد تختلف الحالة عند وصولك للمكان
+                  </p>
+                </div>
                 </section>
 
                 <section class="panel details-panel home-screen-hidden" hidden aria-hidden="true">
@@ -157,19 +165,28 @@
               </div>
             </main>
 
-            <nav class="bottom-nav" aria-label="التنقل السفلي">
+            <nav class="bottom-nav" data-active-tab="home" aria-label="التنقل السفلي">
               <div class="nav-indicator" aria-hidden="true"></div>
+              <button type="button" class="nav-item" data-tab="account" aria-label="حسابي">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M19 21a7 7 0 0 0-14 0"></path>
+                  <circle cx="12" cy="8" r="4"></circle>
+                </svg>
+                <span class="nav-label">حسابي</span>
+              </button>
               <button type="button" class="nav-item active" data-tab="home" aria-current="page" aria-label="الرئيسية">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M3 10.5 12 3l9 7.5"></path>
                   <path d="M6.75 9.75V20h10.5V9.75"></path>
                 </svg>
+                <span class="nav-label">الرئيسية</span>
               </button>
               <button type="button" class="nav-item" data-tab="search" aria-label="البحث">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <circle cx="11" cy="11" r="6.5"></circle>
                   <path d="m16 16 4.5 4.5"></path>
                 </svg>
+                <span class="nav-label">بحث</span>
               </button>
             </nav>
           </div>
@@ -178,24 +195,36 @@
     </div>
 
     <template id="station-card-template">
-      <article class="station-card" tabindex="0" role="button">
-        <div class="station-card-top">
-          <div class="station-card-main">
-            <h3 class="station-card-title"></h3>
-            <p class="station-card-status"></p>
+      <article class="station-card">
+        <div class="station-card-leading" aria-hidden="true">
+          <span class="station-card-fuel-icon station-icon-wrap">
+            <img src="/assets/gas-station.png" class="station-icon-img" alt="" aria-hidden="true" />
+          </span>
+        </div>
+        <div class="station-card-content">
+          <div class="station-card-top">
+            <div class="station-card-main">
+              <h3 class="station-card-title"></h3>
+              <p class="station-card-status"></p>
+            </div>
+          </div>
+          <div class="station-card-bottom">
             <p class="station-card-distance"></p>
+            <span class="queue-pill"></span>
+            <span class="station-card-updated"></span>
+          </div>
+          <div class="station-card-meta">
+            <span class="station-card-reports"></span>
+            <span class="station-card-activity"></span>
+          </div>
+          <div class="station-card-actions">
+            <button type="button" class="station-card-action station-card-action-map" data-station-action="maps">افتح في خرائط Google</button>
           </div>
         </div>
-        <div class="station-card-bottom">
-          <span class="queue-pill"></span>
-          <span class="station-card-updated"></span>
-        </div>
-        <div class="station-card-meta">
-          <span class="station-card-reports"></span>
-          <span class="station-card-activity"></span>
-        </div>
-        <div class="station-card-actions">
-          <button type="button" class="station-card-action station-card-action-map" data-station-action="maps">افتح في خرائط Google</button>
+        <div class="station-card-chevron" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m7 4 6 6-6 6"></path>
+          </svg>
         </div>
       </article>
     </template>

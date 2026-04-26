@@ -1,10 +1,10 @@
-# بنزينة Prototype
+# Shale Static Prototype
 
-واجهة عربية RTL لاختبار فكرة الإبلاغ عن توفر الوقود والزحمة في المحطات داخل طرابلس.
+واجهة عربية RTL ثابتة لاختبار فكرة العثور على أفضل محطة وقود قريبة في طرابلس.
 
 ## التشغيل المحلي
 
-يمكن تشغيل النموذج بأي خادم محلي بسيط. مثال:
+شغّل التطبيق من جذر المشروع باستخدام خادم ملفات ثابت:
 
 ```bash
 python3 -m http.server 5173
@@ -16,58 +16,80 @@ python3 -m http.server 5173
 http://localhost:5173
 ```
 
-## Supabase اختياري
+لا تفتح `index.html` مباشرة عبر `file://` لأن بعض ميزات المتصفح مثل الموقع الجغرافي تحتاج `localhost`.
 
-التطبيق يعمل بدون Supabase.
+## الإعداد عبر `config.js`
 
-إذا لم يتم ضبط الإعدادات:
-- يتم استخدام بيانات المحطات المحلية.
-- يتم حفظ البلاغات محلياً داخل `localStorage`.
+هذا تطبيق HTML/CSS/JS ثابت، لذلك المتصفح لا يقرأ `.env` مباشرة.
 
-إذا تم ضبط Supabase:
-- يحاول التطبيق قراءة المحطات والبلاغات من Supabase.
-- إذا فشل الاتصال، يرجع تلقائياً إلى `localStorage`.
+اضبط إعدادات Supabase في `config.js` قبل النشر:
 
-## إعداد البيئة
-
-انسخ القيم من `.env.example` إلى ملف `.env` أو مررها عبر بيئة التطوير:
-
-```env
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
+```js
+window.BENZINA_CONFIG = {
+  SUPABASE_URL: "https://your-project.supabase.co",
+  SUPABASE_ANON_KEY: "your-public-anon-key",
+  USE_FAKE_LOCATION: false,
+  FAKE_LATITUDE: 32.8872,
+  FAKE_LONGITUDE: 13.1913,
+};
 ```
 
 ملاحظات:
-- لا تضع القيم داخل الكود.
-- في بيئات front-end مثل Vite يمكن أيضاً تمرير:
-  - `VITE_SUPABASE_URL`
-  - `VITE_SUPABASE_ANON_KEY`
-- الكود الحالي يقرأ القيم من `import.meta.env` أو من `window` إذا تم حقنها خارجياً.
+- `SUPABASE_ANON_KEY` هو مفتاح عام مخصص للمتصفح، وليس secret key.
+- إذا تركت `SUPABASE_URL` أو `SUPABASE_ANON_KEY` فارغاً، يعمل التطبيق ببيانات محلية و `localStorage`.
+- ملف `.env` غير مطلوب لتشغيل التطبيق في المتصفح.
+- ملف `.env` متجاهل في Git ويجب عدم الاعتماد عليه في النشر الثابت.
 
-## طبقة البيانات
+## النشر كموقع ثابت
 
-الملفات الأساسية:
-- `supabaseClient.mjs`: عميل Supabase خفيف عبر REST بدون dependency جديدة.
-- `repository.mjs`: يوفّر:
-  - `getStations()`
-  - `getRecentReports()`
-  - `submitReport()`
-- `report-storage.mjs`: fallback محلي عبر `localStorage`.
+انشر محتويات جذر المشروع كما هي على أي خدمة static hosting مثل Netlify أو Vercel Static أو GitHub Pages أو Supabase Storage أو S3.
 
-## السلوك الحالي
+يجب أن تكون الملفات التالية في جذر الموقع المنشور:
 
-- البلاغات الأقدم من 60 دقيقة يتم تجاهلها.
-- fallback المحلي يبقي النموذج شغالاً بدون backend.
-- واجهة المستخدم الحالية لم تتغير بصرياً بسبب إضافة Supabase.
+- `index.html`
+- `styles.css`
+- `app.js`
+- `config.js`
+- ملفات `*.mjs`
+- مجلد `assets/`
+
+المسارات الحالية مصممة للعمل من جذر الموقع:
+
+- `./config.js`
+- `./app.js`
+- `/assets/gas-station.png`
+
+لذلك انشر التطبيق على root path مثل:
+
+```text
+https://example.com/
+```
+
+إذا نشرته داخل subpath مثل `/shale/` فستحتاج إلى تحويل مسارات الأصول المطلقة مثل `/assets/gas-station.png` إلى مسارات نسبية.
+
+## Supabase اختياري
+
+عند وجود إعدادات Supabase صحيحة:
+
+- يتم تحميل المحطات من Supabase.
+- يتم تحميل البلاغات الحديثة من Supabase.
+- يتم إرسال البلاغات إلى Supabase.
+
+عند غياب الإعدادات أو فشل الاتصال:
+
+- يستخدم التطبيق بيانات fallback محلية.
+- يحفظ البلاغات مؤقتاً في `localStorage`.
 
 ## الاختبارات
 
-```bash
-node --test
-```
-
-ولفحص syntax لملف التطبيق:
+افحص syntax:
 
 ```bash
 node --check app.js
+```
+
+شغّل الاختبارات:
+
+```bash
+node --test
 ```

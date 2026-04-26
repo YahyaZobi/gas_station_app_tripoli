@@ -19,6 +19,7 @@ import {
   formatRelativeTime,
   projectStations,
   sortStationsForDiscovery,
+  sortStationsForSearch,
 } from "./logic.mjs";
 import { getLocationModeConfig, getProtocolWarning } from "./environment-utils.mjs";
 import { buildDecisionFirstLayout } from "./home-layout-utils.mjs";
@@ -123,12 +124,14 @@ const stationDetails = document.querySelector("#station-details");
 const detailsPanel = document.querySelector(".details-panel");
 const environmentWarning = document.querySelector("#environment-warning");
 const locationBanner = document.querySelector("#location-banner");
+const listPanelHeading = document.querySelector("#list-panel-heading");
 const screenTitle = document.querySelector("#screen-title");
 const screenSubtitle = document.querySelector("#screen-subtitle");
 const listEmpty = document.querySelector("#list-empty");
 const searchPrompt = document.querySelector("#search-prompt");
 const searchToolbar = document.querySelector("#search-toolbar");
 const showMoreButton = document.querySelector("#show-more-button");
+const homeInfoNotice = document.querySelector("#home-info-notice");
 const stationSearchInput = document.querySelector("#station-search-input");
 const areaFilterContainer = document.querySelector("#area-filter-container");
 const areaFilterSelect = document.querySelector("#area-filter-select");
@@ -345,15 +348,19 @@ function render() {
   const areaOptions = getAreaOptions(projectedStations);
   syncAreaFilter(areaOptions);
 
-  const hasSearch = Boolean(state.searchQuery);
+  const isSearchTab = state.activeTab === "search";
+  const activeArea = isSearchTab ? state.selectedArea : "";
+  const hasSearch = isSearchTab && Boolean(state.searchQuery || activeArea);
   const nearbyRadiusKm = state.discoveryRadiusKm;
   const radiusStations = projectedStations.filter((station) => station.distanceKm <= nearbyRadiusKm);
   const nearbyBaseStations = radiusStations;
-  const discoveryBaseStations = hasSearch ? projectedStations : nearbyBaseStations;
-  const areaScopedStations = state.selectedArea
-    ? discoveryBaseStations.filter((station) => getStationAreaLabel(station) === state.selectedArea)
+  const discoveryBaseStations = isSearchTab ? projectedStations : nearbyBaseStations;
+  const areaScopedStations = activeArea
+    ? discoveryBaseStations.filter((station) => getStationAreaLabel(station) === activeArea)
     : discoveryBaseStations;
-  const searchedStations = areaScopedStations.filter((station) => matchesStationSearch(station, state.searchQuery));
+  const searchedStations = sortStationsForSearch(
+    areaScopedStations.filter((station) => matchesStationSearch(station, state.searchQuery)),
+  );
   const discoveryStations = searchedStations.length || hasSearch || state.selectedArea
     ? searchedStations
     : nearbyBaseStations;
@@ -460,6 +467,13 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
   const template = document.querySelector("#station-card-template");
   const { bestStation, recommendedStations, nearbyStations, avoidStations } = stationSections;
 
+  if (state.activeTab === "account") {
+    renderAccountScreen();
+    listEmpty.classList.add("hidden");
+    showMoreButton.classList.add("hidden");
+    return;
+  }
+
   if (state.activeTab === "search") {
     renderSearchResults({
       stations: searchResults,
@@ -551,25 +565,54 @@ function renderSearchResults({ stations, hasSearch, template }) {
   );
 }
 
+function renderAccountScreen() {
+  stationList.append(createAccountScreen());
+}
+
+function createAccountScreen() {
+  const screen = document.createElement("section");
+  screen.className = "account-screen";
+  screen.innerHTML = `
+    ${createAccountCardMarkup(
+      "موقعي",
+      getLocationStatusText(),
+      "نستخدم موقعك لعرض أقرب المحطات فقط",
+    )}
+    ${createAccountCardMarkup("المفضلة", "المحطات المحفوظة ستظهر هنا")}
+    ${createAccountCardMarkup("آخر استخدام", "المحطات التي فتحتها مؤخراً ستظهر هنا")}
+    ${createAccountCardMarkup("عن التطبيق", "شيل يساعدك تعرف أقرب محطة مناسبة قبل ما تمشي")}
+    ${createAccountCardMarkup("الخصوصية", "لا نعرض موقعك لأي مستخدم آخر")}
+  `;
+  return screen;
+}
+
+function createAccountCardMarkup(title, text, note = "") {
+  return `
+    <article class="account-card">
+      <h3>${title}</h3>
+      <p>${text}</p>
+      ${note ? `<p class="account-card-note">${note}</p>` : ""}
+    </article>
+  `;
+}
+
+function getLocationStatusText() {
+  if (state.hasUserLocation) {
+    return "الموقع مفعّل";
+  }
+
+  return "الموقع غير مفعّل";
+}
+
 function createHeroSection(station, template) {
   const section = document.createElement("section");
   section.className = "station-group station-group-hero";
-
-  const header = document.createElement("div");
-  header.className = "station-group-header";
-  header.innerHTML = `
-    <div>
-      <p class="section-label">الأفضل الآن</p>
-      <h3 class="station-group-title">👑 الأفضل الآن</h3>
-    </div>
-  `;
-  section.append(header);
 
   const cards = document.createElement("div");
   cards.className = "station-group-list station-group-list-hero";
   cards.append(
     createStationCard(
-      { ...station, recommendationBadge: "أفضل خيار" },
+      { ...station, recommendationBadge: "الأفضل الآن" },
       template,
       "recommended",
       "hero",
@@ -584,21 +627,11 @@ function createBackupSection(station, template) {
   const section = document.createElement("section");
   section.className = "station-group station-group-backup";
 
-  const header = document.createElement("div");
-  header.className = "station-group-header";
-  header.innerHTML = `
-    <div>
-      <p class="section-label">الخيار الثاني</p>
-      <h3 class="station-group-title">الخيار الثاني</h3>
-    </div>
-  `;
-  section.append(header);
-
   const cards = document.createElement("div");
   cards.className = "station-group-list station-group-list-compact";
   cards.append(
     createStationCard(
-      { ...station, recommendationBadge: "الخيار الثاني" },
+      { ...station, recommendationBadge: "⭐ الخيار الثاني" },
       template,
       "backup",
       "backup",
@@ -635,6 +668,12 @@ function createSectionBlock({
 
   const cards = document.createElement("div");
   cards.className = `station-group-list station-group-list-${variant}`;
+  if (tone === "nearby" && variant === "compact") {
+    cards.classList.add("nearby-list-card");
+  }
+  if (tone === "search" && variant === "compact") {
+    cards.classList.add("search-list-card");
+  }
   stations.forEach((station) => {
     cards.append(createStationCard(station, template, tone, variant));
   });
@@ -663,6 +702,18 @@ function createOtherSectionBlock(stations, template) {
 }
 
 function createStationCard(station, template, tone, variant = "default") {
+    if (variant === "hero") {
+      return createReferenceHeroCard(station);
+    }
+
+    if (variant === "backup") {
+      return createReferenceBackupCard(station);
+    }
+
+    if (variant === "compact") {
+      return createReferenceListCard(station, tone);
+    }
+
     const fragment = template.content.cloneNode(true);
     const card = fragment.querySelector(".station-card");
     const top = fragment.querySelector(".station-card-top");
@@ -676,8 +727,9 @@ function createStationCard(station, template, tone, variant = "default") {
     const mapsAction = fragment.querySelector("[data-station-action='maps']");
 
     title.textContent = station.name;
-    status.textContent = getDisplayStatus(station);
-    status.classList.add(`station-card-status-${station.status}`);
+    const displayStatus = getDisplayStatus(station);
+    status.textContent = displayStatus;
+    status.classList.add(`station-card-status-${getDisplayStatusTone(displayStatus)}`);
     distance.textContent = formatDistanceLabel(station.distanceKm);
     queue.textContent = getDriverFlowLabel(station);
     updated.textContent = getStationUpdatedText(station);
@@ -710,17 +762,174 @@ function createStationCard(station, template, tone, variant = "default") {
 
     if (variant === "hero") {
       card.classList.add("station-card-hero");
+      card.classList.add("best-station-card");
     }
 
     if (variant === "backup") {
       card.classList.add("station-card-backup-variant");
+      card.classList.add("backup-station-card");
     }
 
     if (variant === "compact") {
       card.classList.add("station-card-compact");
     }
 
+    if (variant === "hero") {
+      mapsAction.innerHTML = `
+        <span class="station-card-action-icon" aria-hidden="true">⌖</span>
+        <span>افتح في خرائط Google</span>
+      `;
+    } else if (variant === "backup" || variant === "compact") {
+      mapsAction.innerHTML = `
+        <span class="sr-only">افتح في خرائط Google</span>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m7 4 6 6-6 6"></path>
+        </svg>
+      `;
+      mapsAction.setAttribute("aria-label", `افتح ${station.name} في خرائط Google`);
+    }
+
     return fragment;
+}
+
+function createReferenceHeroCard(station) {
+  const card = createStationCardElement(station, "recommended", "hero");
+  const displayStatus = getDisplayStatus(station);
+  card.className = "station-card best-station-card hero-card";
+  card.innerHTML = `
+    <div class="best-station-burst" aria-hidden="true"></div>
+    <div class="best-station-body">
+      <div class="best-station-copy">
+        <span class="best-station-label badge-best">👑 الأفضل الآن</span>
+        <h3 class="best-station-title title"></h3>
+        <p class="station-card-status status-pill"></p>
+        ${createMetaRowMarkup("best-station-meta meta-row")}
+      </div>
+      <div class="best-station-icon icon-wrapper station-icon-wrap" aria-hidden="true">
+        <img src="/assets/gas-station.png" class="station-icon-img hero-icon" alt="" aria-hidden="true" />
+      </div>
+    </div>
+    <button type="button" class="best-station-cta cta-button station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
+      <span>افتح في خرائط Google</span>
+      <span class="station-card-action-icon" aria-hidden="true">⌖</span>
+    </button>
+  `;
+
+  card.querySelector(".best-station-title").textContent = station.name;
+  fillStatus(card.querySelector(".station-card-status"), displayStatus);
+  fillMetaRow(card, station);
+  return card;
+}
+
+function createReferenceBackupCard(station) {
+  const card = createStationCardElement(station, "backup", "backup");
+  const displayStatus = getDisplayStatus(station);
+  card.className = "station-card backup-station-card";
+  card.innerHTML = `
+    <div class="backup-station-copy">
+      <span class="backup-station-label">⭐ الخيار الثاني</span>
+      <h3 class="backup-station-title"></h3>
+      <p class="station-card-status"></p>
+      ${createMetaRowMarkup("backup-station-meta")}
+    </div>
+    <div class="backup-station-icon station-icon-wrap" aria-hidden="true">
+      ${createFuelIconMarkup()}
+    </div>
+    <button type="button" class="station-card-row-action station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
+      ${createChevronIconMarkup()}
+    </button>
+  `;
+
+  card.querySelector(".backup-station-title").textContent = station.name;
+  fillStatus(card.querySelector(".station-card-status"), displayStatus);
+  fillMetaRow(card, station);
+  return card;
+}
+
+function createReferenceListCard(station, tone) {
+  const card = createStationCardElement(station, tone, "compact");
+  const displayStatus = getDisplayStatus(station);
+  card.className = "station-card nearby-station-row";
+  card.innerHTML = `
+    <div class="nearby-station-icon station-icon-wrap" aria-hidden="true">
+      ${createFuelIconMarkup()}
+    </div>
+    <div class="nearby-station-copy">
+      <h3 class="nearby-station-title"></h3>
+      <p class="station-card-status"></p>
+      ${createMetaRowMarkup("nearby-station-meta")}
+    </div>
+    <button type="button" class="station-card-row-action station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
+      ${createChevronIconMarkup()}
+    </button>
+  `;
+
+  card.querySelector(".nearby-station-title").textContent = station.name;
+  fillStatus(card.querySelector(".station-card-status"), displayStatus);
+  fillMetaRow(card, station);
+  return card;
+}
+
+function createStationCardElement(station, tone, variant) {
+  const card = document.createElement("article");
+  card.dataset.stationId = station.id;
+  card.dataset.stationTone = tone;
+  card.dataset.stationVariant = variant;
+  return card;
+}
+
+function fillStatus(element, displayStatus) {
+  element.textContent = displayStatus;
+  element.classList.add(`station-card-status-${getDisplayStatusTone(displayStatus)}`);
+}
+
+function fillMetaRow(card, station) {
+  card.querySelector("[data-card-distance]").textContent = formatDistanceLabel(station.distanceKm);
+  card.querySelector("[data-card-updated]").textContent = getStationUpdatedText(station);
+}
+
+function createMetaRowMarkup(className) {
+  return `
+    <div class="station-card-meta-row ${className}">
+      <span class="station-card-meta-item">
+        <span aria-hidden="true">📍</span>
+        <span data-card-distance></span>
+      </span>
+      <span class="station-card-meta-separator" aria-hidden="true">·</span>
+      <span class="station-card-meta-item">
+        <span aria-hidden="true">⏱</span>
+        <span data-card-updated></span>
+      </span>
+    </div>
+  `;
+}
+
+function createFuelIconMarkup() {
+  return `<img src="/assets/gas-station.png" class="station-icon-img" alt="" aria-hidden="true" />`;
+}
+
+function createChevronIconMarkup() {
+  return `
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m7 4 6 6-6 6"></path>
+    </svg>
+  `;
+}
+
+function getDisplayStatusTone(displayStatus) {
+  if (displayStatus === "عالبومبة طول") {
+    return "available";
+  }
+
+  if (displayStatus === "طابور خفيف") {
+    return "light";
+  }
+
+  if (displayStatus === "زحمة") {
+    return "busy";
+  }
+
+  return "no_fuel";
 }
 
 function updateMapActionButtons() {
@@ -799,11 +1008,16 @@ function syncAreaFilter(areaOptions) {
 
 function syncActiveTabUi() {
   const isSearchTab = state.activeTab === "search";
+  const isAccountTab = state.activeTab === "account";
 
-  screenTitle.textContent = isSearchTab ? "البحث" : "أقرب المحطات";
-  screenSubtitle.textContent = isSearchTab
-    ? "ابحث عن المحطة أو المنطقة المناسبة"
-    : "اختر المحطة المناسبة وافتحها في خرائط Google";
+  screenTitle.textContent = isAccountTab ? "حسابي" : isSearchTab ? "البحث" : "أقرب المحطات";
+  screenSubtitle.textContent = isAccountTab
+    ? "إعدادات بسيطة للنموذج الأولي"
+    : isSearchTab
+      ? "ابحث عن المحطة أو المنطقة المناسبة"
+      : "اختر المحطة المناسبة وافتحها في خرائط Google";
+  listPanelHeading.classList.toggle("hidden", !isSearchTab && !isAccountTab);
+  homeInfoNotice.classList.toggle("hidden", isSearchTab || isAccountTab);
 
   searchToolbar.classList.toggle("hidden", !isSearchTab);
   if (!isSearchTab) {
@@ -815,12 +1029,6 @@ function syncActiveTabUi() {
     item.classList.toggle("active", isActive);
     item.setAttribute("aria-current", isActive ? "page" : "false");
   });
-
-  if (navIndicator) {
-    navIndicator.style.transform = isSearchTab
-      ? "translateX(calc(-100% - 12px))"
-      : "translateX(0)";
-  }
 
   if (bottomNav) {
     bottomNav.dataset.activeTab = state.activeTab;

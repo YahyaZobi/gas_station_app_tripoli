@@ -24,6 +24,7 @@ import {
   getReportSuccessMessage,
   getStationAreaLabel,
   getStationActivitySummary,
+  getStationConfidenceSummary,
   getStationPriorityScore,
   getStationUrgencyMessage,
   matchesStationSearch,
@@ -31,9 +32,11 @@ import {
   PRESENCE_PROXIMITY_KM,
   PRESENCE_WINDOW_MINUTES,
   projectStations,
+  rankStations,
   REPORT_PROXIMITY_KM,
   REPORT_WINDOW_MINUTES,
   sortStationsForDiscovery,
+  sortStationsForSearch,
   STATUS_META,
   formatRelativeTime,
   summarizeStationPresence,
@@ -312,6 +315,53 @@ test("recent report updates lastUpdated when newer than presence", () => {
   assert.equal(result.hasFreshSignal, true);
 });
 
+test("confidence summary follows active device, signal count, and freshness rules", () => {
+  const now = new Date("2026-04-24T12:00:00.000Z");
+
+  assert.deepEqual(
+    getStationConfidenceSummary({ activeDevices: 5, lastUpdated: "2026-04-24T11:20:00.000Z", now }),
+    { level: "high", labelArabic: "ثقة عالية" },
+  );
+  assert.deepEqual(
+    getStationConfidenceSummary({ activeDevices: 1, recentSignalsCount: 3, lastUpdated: "2026-04-24T11:55:00.000Z", now }),
+    { level: "high", labelArabic: "ثقة عالية" },
+  );
+  assert.deepEqual(
+    getStationConfidenceSummary({ activeDevices: 2, lastUpdated: "2026-04-24T11:20:00.000Z", now }),
+    { level: "medium", labelArabic: "ثقة متوسطة" },
+  );
+  assert.deepEqual(
+    getStationConfidenceSummary({ activeDevices: 0, lastUpdated: "2026-04-24T11:35:00.000Z", now }),
+    { level: "medium", labelArabic: "ثقة متوسطة" },
+  );
+  assert.deepEqual(
+    getStationConfidenceSummary({ activeDevices: 0, lastUpdated: "2026-04-24T11:20:00.000Z", now }),
+    { level: "low", labelArabic: "ثقة ضعيفة" },
+  );
+});
+
+test("station summaries expose confidence level and Arabic label", () => {
+  const now = new Date("2026-04-24T12:00:00.000Z");
+  const result = projectStations(
+    [station],
+    [
+      {
+        id: "recent-report",
+        stationId: "station-1",
+        status: "available",
+        queueLevel: "short",
+        createdAt: "2026-04-24T11:59:00.000Z",
+      },
+    ],
+    { latitude: 32.88, longitude: 13.19 },
+    [],
+    now,
+  )[0];
+
+  assert.equal(result.confidenceLevel, "medium");
+  assert.equal(result.confidenceLabelArabic, "ثقة متوسطة");
+});
+
 test("includes a marker color for every station status used by the map", () => {
   assert.match(STATUS_META.available.markerColor, /^#/);
   assert.match(STATUS_META.busy.markerColor, /^#/);
@@ -557,6 +607,79 @@ test("station priority score favors available, short-queue, nearby stations", ()
   assert.ok(getStationPriorityScore(bestStation) > getStationPriorityScore(worseStation));
 });
 
+test("ranking engine returns best, backup, and nearby stations by status priority", () => {
+  const ranking = rankStations([
+    { id: "closed", status: "no_fuel", queueLevel: "medium", distanceKm: 0.1, confidenceLevel: "high", lastUpdated: "2026-04-24T11:59:00.000Z" },
+    { id: "busy", status: "busy", activityLevel: "busy", queueLevel: "long", distanceKm: 0.2, confidenceLevel: "high", lastUpdated: "2026-04-24T11:58:00.000Z" },
+    { id: "light", status: "available", queueLevel: "medium", distanceKm: 1.8, confidenceLevel: "medium", lastUpdated: "2026-04-24T11:56:00.000Z" },
+    { id: "direct", status: "available", queueLevel: "short", distanceKm: 2.5, confidenceLevel: "medium", lastUpdated: "2026-04-24T11:55:00.000Z" },
+  ]);
+
+  assert.equal(ranking.bestStation?.id, "direct");
+  assert.equal(ranking.backupStation?.id, "light");
+  assert.deepEqual(ranking.nearbyStations.map((station) => station.id), ["busy", "closed"]);
+});
+
+test("ranking engine never recommends closed stations unless every station is closed", () => {
+  const mixedRanking = rankStations([
+    { id: "closed-near", status: "no_fuel", queueLevel: "medium", distanceKm: 0.1, confidenceLevel: "high" },
+    { id: "busy-far", status: "busy", activityLevel: "busy", queueLevel: "long", distanceKm: 4.5, confidenceLevel: "low" },
+  ]);
+  const closedOnlyRanking = rankStations([
+    { id: "closed-near", status: "no_fuel", queueLevel: "medium", distanceKm: 0.7, confidenceLevel: "medium" },
+    { id: "closed-fresh", status: "no_fuel", queueLevel: "medium", distanceKm: 0.7, confidenceLevel: "high", lastUpdated: "2026-04-24T11:59:00.000Z" },
+  ]);
+
+  assert.equal(mixedRanking.bestStation?.id, "busy-far");
+  assert.equal(closedOnlyRanking.bestStation?.id, "closed-fresh");
+});
+
+test("ranking engine sorts matching statuses by distance, freshness, then confidence", () => {
+  const distanceRanking = rankStations([
+    { id: "far-fresh", status: "available", queueLevel: "short", distanceKm: 2, confidenceLevel: "high", lastUpdated: "2026-04-24T11:59:00.000Z" },
+    { id: "near-old", status: "available", queueLevel: "short", distanceKm: 1, confidenceLevel: "low", lastUpdated: "2026-04-24T11:40:00.000Z" },
+  ]);
+  const freshnessRanking = rankStations([
+    { id: "old-high", status: "available", queueLevel: "short", distanceKm: 1, confidenceLevel: "high", lastUpdated: "2026-04-24T11:40:00.000Z" },
+    { id: "fresh-low", status: "available", queueLevel: "short", distanceKm: 1, confidenceLevel: "low", lastUpdated: "2026-04-24T11:59:00.000Z" },
+  ]);
+  const confidenceRanking = rankStations([
+    { id: "medium", status: "available", queueLevel: "short", distanceKm: 1, confidenceLevel: "medium", lastUpdated: "2026-04-24T11:59:00.000Z" },
+    { id: "high", status: "available", queueLevel: "short", distanceKm: 1, confidenceLevel: "high", lastUpdated: "2026-04-24T11:59:00.000Z" },
+  ]);
+
+  assert.equal(distanceRanking.bestStation?.id, "far-fresh");
+  assert.equal(freshnessRanking.bestStation?.id, "old-high");
+  assert.equal(confidenceRanking.bestStation?.id, "high");
+});
+
+test("ranking engine treats missing status data as low confidence without marking it closed", () => {
+  const ranking = rankStations([
+    { id: "missing", status: "unknown", queueLevel: "unknown", distanceKm: 0.2, confidenceLevel: "high", hasFreshSignal: false },
+    { id: "confirmed", status: "available", queueLevel: "medium", distanceKm: 1.4, confidenceLevel: "medium", hasFreshSignal: true },
+  ]);
+
+  assert.equal(ranking.bestStation?.id, "confirmed");
+  assert.equal(ranking.backupStation, null);
+  assert.equal(ranking.nearbyStations[0]?.id, "missing");
+  assert.equal(getDisplayStatus(ranking.nearbyStations[0]), "طابور خفيف");
+  assert.equal(ranking.nearbyStations[0].confidenceLevel, "low");
+});
+
+test("ranking engine avoids low-confidence recommendations when better confidence exists", () => {
+  const ranking = rankStations([
+    { id: "low-near", status: "available", queueLevel: "short", distanceKm: 0.2, confidenceLevel: "low", lastUpdated: "2026-04-24T11:59:00.000Z" },
+    { id: "medium-far", status: "available", queueLevel: "short", distanceKm: 2.1, confidenceLevel: "medium", lastUpdated: "2026-04-24T11:40:00.000Z" },
+  ]);
+  const lowOnlyRanking = rankStations([
+    { id: "low-near", status: "available", queueLevel: "short", distanceKm: 0.2, confidenceLevel: "low" },
+    { id: "low-far", status: "busy", queueLevel: "long", distanceKm: 2.1, confidenceLevel: "low" },
+  ]);
+
+  assert.equal(ranking.bestStation?.id, "medium-far");
+  assert.equal(lowOnlyRanking.bestStation?.id, "low-near");
+});
+
 test("station sections prioritize top available stations and keep crowded or closed lower", () => {
   const sections = buildStationSections([
     { id: "1", status: "available", queueLevel: "short", distanceKm: 0.6, confidenceLevel: "high", hasFreshSignal: true, activeDevices: 6 },
@@ -568,7 +691,7 @@ test("station sections prioritize top available stations and keep crowded or clo
 
   assert.equal(sections.bestStation?.id, "1");
   assert.equal(sections.backupStation?.id, "2");
-  assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["4", "3", "5"]);
+  assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["3", "4", "5"]);
   assert.deepEqual(sections.nearbyStations.map((station) => station.id), []);
   assert.deepEqual(sections.avoidStations.map((station) => station.id), []);
 });
@@ -586,15 +709,17 @@ test("station sections can promote likely available activity signals when no ava
   assert.deepEqual(sections.nearbyStations.map((station) => station.id), []);
 });
 
-test("station sections still keep nearby stations when all stations display as مسكر", () => {
+test("station sections keep low-confidence stations visible instead of treating them as closed", () => {
   const sections = buildStationSections([
     { id: "1", status: "unknown", activityLevel: "unknown", queueLevel: "unknown", distanceKm: 0.3, hasFreshSignal: false, activeDevices: 0 },
     { id: "2", status: "no_fuel", activityLevel: "unknown", queueLevel: "medium", distanceKm: 0.8, hasFreshSignal: true, activeDevices: 0 },
     { id: "3", status: "uncertain", activityLevel: "low", queueLevel: "medium", distanceKm: 1.2, hasFreshSignal: false, activeDevices: 0 },
   ]);
 
-  assert.equal(sections.bestStation, null);
-  assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["1", "3", "2"]);
+  assert.equal(sections.bestStation?.id, "1");
+  assert.equal(sections.bestStation.confidenceLevel, "low");
+  assert.equal(getDisplayStatus(sections.bestStation), "طابور خفيف");
+  assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["2"]);
 });
 
 test("unknown and uncertain stations can never be selected as the best station", () => {
@@ -632,6 +757,24 @@ test("decision-first layout shows hero, backup, then nearby stations without dup
   assert.deepEqual(layout.otherStations.map((station) => station.id), ["n5", "x1", "x2"]);
 });
 
+test("decision-first layout promotes a non-closed hero when no reliable best exists", () => {
+  const layout = buildDecisionFirstLayout({
+    bestStation: null,
+    backupStation: null,
+    recommendedStations: [
+      { id: "light", status: "unknown", queueLevel: "unknown" },
+      { id: "closed", status: "no_fuel", queueLevel: "medium" },
+      { id: "busy", status: "busy", queueLevel: "long" },
+    ],
+    nearbyStations: [{ id: "nearby", status: "available", queueLevel: "short" }],
+    avoidStations: [],
+  });
+
+  assert.equal(layout.heroStation?.id, "light");
+  assert.equal(layout.backupStation?.id, "busy");
+  assert.deepEqual(layout.nearbyVisible.map((station) => station.id), ["closed", "nearby"]);
+});
+
 test("discovery sorting keeps nearby stations first, then convenience rank", () => {
   const sortedStations = sortStationsForDiscovery([
     { id: "far-open", status: "available", queueLevel: "short", distanceKm: 4.8, activeDevices: 6 },
@@ -661,6 +804,33 @@ test("search matches station name and area labels", () => {
   assert.equal(matchesStationSearch(stationWithArea, "السياحي"), true);
   assert.equal(matchesStationSearch(stationWithArea, "الهاني"), false);
   assert.equal(getStationAreaLabel(stationWithArea), "قرقارش");
+});
+
+test("search matches station name independently from area labels", () => {
+  assert.equal(
+    matchesStationSearch({ id: "station-name", name: "محطة طريق المطار" }, "المطار"),
+    true,
+  );
+});
+
+test("search results sort by status, distance, then confidence", () => {
+  const sortedStations = sortStationsForSearch([
+    { id: "closed-near", status: "no_fuel", queueLevel: "medium", distanceKm: 0.1, confidenceLevel: "high" },
+    { id: "busy-near", status: "busy", queueLevel: "long", distanceKm: 0.4, confidenceLevel: "high" },
+    { id: "light-far", status: "available", queueLevel: "medium", distanceKm: 4.2, confidenceLevel: "high" },
+    { id: "direct-far", status: "available", queueLevel: "short", distanceKm: 2.5, confidenceLevel: "low" },
+    { id: "direct-near-low", status: "available", queueLevel: "short", distanceKm: 1.2, confidenceLevel: "low" },
+    { id: "direct-near-high", status: "available", queueLevel: "short", distanceKm: 1.2, confidenceLevel: "high" },
+  ]);
+
+  assert.deepEqual(sortedStations.map((station) => station.id), [
+    "direct-near-high",
+    "direct-near-low",
+    "direct-far",
+    "light-far",
+    "busy-near",
+    "closed-near",
+  ]);
 });
 
 test("area options are hidden until unique area labels exist", () => {
@@ -1220,20 +1390,35 @@ test("home screen and search tab keep clear separated copy", () => {
   const source = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
   assert.match(html, /<main class="app-content">/);
+  assert.match(html, /id="list-panel-heading"/);
   assert.match(html, /id="screen-title">أقرب المحطات<\/h2>/);
   assert.match(html, /id="screen-subtitle">اختر المحطة المناسبة وافتحها في خرائط Google<\/p>/);
   assert.match(html, /id="search-toolbar"/);
   assert.match(html, /placeholder="ابحث عن محطة أو منطقة"/);
   assert.match(html, /ابحث باسم المحطة أو المنطقة/);
+  assert.match(source, /listEmpty\.textContent = "لا توجد نتائج مطابقة"/);
+  assert.match(html, /id="home-info-notice"/);
   assert.match(html, /<nav class="bottom-nav"/);
   assert.match(html, /class="nav-indicator"/);
+  assert.match(html, /data-tab="account"/);
+  assert.match(html, /حسابي/);
   assert.match(html, /<button type="button" class="nav-item active" data-tab="home"/);
   assert.match(html, /<svg viewBox="0 0 24 24"/);
   assert.match(html, /data-tab="home"/);
   assert.match(html, /data-tab="search"/);
   assert.match(source, /state\.activeTab === "search"/);
-  assert.match(source, /screenTitle\.textContent = isSearchTab \? "البحث" : "أقرب المحطات"/);
-  assert.match(source, /navIndicator\.style\.transform = isSearchTab/);
+  assert.match(source, /const discoveryBaseStations = isSearchTab \? projectedStations : nearbyBaseStations/);
+  assert.match(source, /sortStationsForSearch\(/);
+  assert.match(source, /screenTitle\.textContent = isAccountTab \? "حسابي" : isSearchTab \? "البحث" : "أقرب المحطات"/);
+  assert.match(source, /listPanelHeading\.classList\.toggle\("hidden", !isSearchTab && !isAccountTab\)/);
+  assert.match(source, /homeInfoNotice\.classList\.toggle\("hidden", isSearchTab \|\| isAccountTab\)/);
+  assert.match(source, /state\.activeTab === "account"/);
+  assert.match(source, /bottomNav\.dataset\.activeTab = state\.activeTab/);
+  assert.match(source, /موقعي/);
+  assert.match(source, /نستخدم موقعك لعرض أقرب المحطات فقط/);
+  assert.match(source, /المحطات المحفوظة ستظهر هنا/);
+  assert.match(source, /شيل يساعدك تعرف أقرب محطة مناسبة قبل ما تمشي/);
+  assert.match(source, /لا نعرض موقعك لأي مستخدم آخر/);
   assert.match(source, /state\.discoveryRadiusKm = EXPANDED_DISCOVERY_RADIUS_KM/);
   assert.match(source, /distanceKm <= nearbyRadiusKm/);
 });
@@ -1256,7 +1441,10 @@ test("home screen uses best and backup section labels", () => {
 
 test("styles keep a premium hero card and full-width primary action", () => {
   const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const source = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
+  assert.match(source, /card\.classList\.add\("best-station-card"\)/);
+  assert.match(css, /\.station-card-best \.station-card-action-map \{/);
   assert.match(css, /\.station-card-hero \{/);
   assert.match(css, /width: 100%;\n\s+min-height: 54px;/);
 });
@@ -1266,30 +1454,50 @@ test("bottom navigation uses a dark premium bar with a green active pill", () =>
 
   assert.match(css, /\.bottom-nav \{/);
   assert.match(css, /position: absolute;/);
-  assert.match(css, /bottom: 16px;/);
-  assert.match(css, /width: 85%;/);
-  assert.match(css, /height: 56px;/);
+  assert.match(css, /bottom: 14px;/);
+  assert.match(css, /left: 16px;/);
+  assert.match(css, /right: 16px;/);
+  assert.match(css, /height: 72px;/);
+  assert.match(css, /grid-template-columns: repeat\(3, 1fr\);/);
   assert.match(css, /border-radius: 999px;/);
   assert.match(css, /background: #0f172a;/);
   assert.match(css, /\.app-content \{/);
   assert.match(css, /overflow-y: auto;/);
-  assert.match(css, /padding: 52px 12px 96px;/);
+  assert.match(css, /padding: 52px 16px 112px;/);
   assert.match(css, /\.nav-indicator \{/);
-  assert.match(css, /width: calc\(50% - 12px\);/);
-  assert.match(css, /transition: transform 200ms ease;/);
+  assert.match(css, /width: calc\(\(100% - 24px\) \/ 3\);/);
+  assert.match(css, /background: linear-gradient\(135deg, #16a34a, #2fa84f\);/);
+  assert.match(css, /transition: left 220ms ease;/);
+  assert.match(css, /\.bottom-nav\[data-active-tab="account"\] \.nav-indicator \{/);
+  assert.match(css, /\.bottom-nav\[data-active-tab="home"\] \.nav-indicator \{/);
+  assert.match(css, /left: calc\(33\.333% \+ 4px\);/);
+  assert.match(css, /\.bottom-nav\[data-active-tab="search"\] \.nav-indicator \{/);
+  assert.match(css, /left: calc\(66\.666% \+ 0px\);/);
   assert.match(css, /\.nav-item \{/);
   assert.match(css, /\.nav-item\.active \{/);
-  assert.match(css, /background: #2fa84f;/);
+  assert.match(css, /\.nav-label \{/);
 });
 
-test("station cards keep a visual status dot and warmer premium treatment", () => {
+test("station cards keep colored status badges and reference-style premium treatment", () => {
   const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
   assert.match(css, /\.station-card-status::before \{/);
-  assert.match(css, /background:\n\s+linear-gradient\(180deg, rgba\(253, 255, 253, 1\), rgba\(237, 248, 239, 0\.98\)\);/);
-  assert.match(css, /box-shadow:\n\s+0 16px 34px rgba\(119, 89, 47, 0\.08\),/);
+  assert.match(css, /content: none;/);
+  assert.match(css, /\.station-card-best \{/);
+  assert.match(css, /linear-gradient\(135deg, #0f3d2e 0%, #1e7a3a 55%, #2fa84f 100%\)/);
+  assert.match(css, /\.station-card-best::before \{/);
+  assert.match(css, /\.station-card-best \.station-card-fuel-icon \{/);
+  assert.match(css, /\.nearby-list-card \{/);
+  assert.match(css, /\.info-notice \{/);
+  assert.match(css, /\.station-card-leading \{/);
+  assert.match(css, /\.station-card-chevron \{/);
+  assert.match(css, /\.station-card-status-light \{/);
   assert.match(css, /\.station-card-backup \{/);
   assert.match(css, /\.station-card-badge \{/);
+  assert.match(css, /\.backup-station-card \{/);
+  assert.match(html, /class="station-card-leading"/);
+  assert.match(html, /class="station-card-chevron"/);
 });
 
 test("only the maps CTA triggers card navigation interactions", () => {

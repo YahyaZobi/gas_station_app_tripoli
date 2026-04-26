@@ -54,6 +54,12 @@ export const ACTIVITY_LABELS = {
   busy: "زحمة",
 };
 
+export const CONFIDENCE_LABELS_ARABIC = {
+  high: "ثقة عالية",
+  medium: "ثقة متوسطة",
+  low: "ثقة ضعيفة",
+};
+
 const QUEUE_SCORE_WEIGHTS = {
   short: 30,
   medium: 10,
@@ -270,6 +276,7 @@ export function aggregateStation(station, reports, now = new Date()) {
 function aggregateStationWithPresence(station, reports, presenceSummary = {}, now = new Date()) {
   const recentReports = getRecentReportsForStation(station.id, reports, now);
   const activeDevices = presenceSummary.activeDevices ?? 0;
+  const recentPresenceSignalsCount = presenceSummary.recentSignalsCount ?? 0;
   const activityLevel = getActivityLevel(activeDevices);
   const lastPresenceAt = presenceSummary.lastSeenAt ?? null;
   const hasRecentPresenceData = Boolean(lastPresenceAt) &&
@@ -317,6 +324,16 @@ function aggregateStationWithPresence(station, reports, presenceSummary = {}, no
   const signalNote = getSignalFreshnessNote(lastUpdated, now);
   const finalStatus = status;
   const finalQueueLevel = queueLevel;
+  const recentReportSignalsCount = recentReports.filter(
+    (report) => minutesSince(getReportTimestamp(report), now) <= PRESENCE_RECENT_WINDOW_MINUTES,
+  ).length;
+  const confidence = getStationConfidenceSummary({
+    activeDevices,
+    recentSignalsCount: recentPresenceSignalsCount + recentReportSignalsCount,
+    lastUpdated,
+    recentReportsCount: recentReports.length,
+    now,
+  });
 
   return {
     ...station,
@@ -331,14 +348,9 @@ function aggregateStationWithPresence(station, reports, presenceSummary = {}, no
     signalNote,
     hasFreshSignal,
     recentReportsCount: recentReports.length,
-    confidenceLevel: getConfidenceLevel({
-      recentReportsCount: recentReports.length,
-      availableWeight,
-      noFuelWeight,
-      activeDevices,
-      activityLevel,
-      status: finalStatus,
-    }),
+    recentSignalsCount: recentPresenceSignalsCount + recentReportSignalsCount,
+    confidenceLevel: confidence.level,
+    confidenceLabelArabic: confidence.labelArabic,
   };
 }
 
@@ -515,12 +527,15 @@ export function summarizeStationPresence(presenceRows, now = new Date()) {
 
     const existingSummary = countsByStation.get(row.stationId) ?? {
       activeDevices: 0,
+      recentSignalsCount: 0,
       lastSeenAt: null,
     };
 
     countsByStation.set(row.stationId, {
       activeDevices:
         existingSummary.activeDevices + (ageMinutes <= PRESENCE_WINDOW_MINUTES ? 1 : 0),
+      recentSignalsCount:
+        existingSummary.recentSignalsCount + (ageMinutes <= PRESENCE_RECENT_WINDOW_MINUTES ? 1 : 0),
       lastSeenAt: getMostRecentTimestamp(existingSummary.lastSeenAt, row.lastSeenAt),
     });
   });
@@ -575,6 +590,29 @@ export function getStationPriorityGroup(station) {
   return "candidate";
 }
 
+export function rankStations(stations, { listLimit = 5 } = {}) {
+  const rankedStations = sortStationsForRanking(stations);
+  const nonClosedStations = rankedStations.filter((station) => getDisplayStatus(station) !== "مسكر");
+  const confidentStations = nonClosedStations.filter((station) => station.confidenceLevel !== "low");
+  const recommendationPool = confidentStations.length
+    ? confidentStations
+    : nonClosedStations.length
+      ? nonClosedStations
+      : rankedStations;
+  const bestStation = recommendationPool[0] ?? null;
+  const backupStation = recommendationPool.find((station) => station.id !== bestStation?.id) ?? null;
+  const selectedIds = new Set([bestStation?.id, backupStation?.id].filter(Boolean));
+  const nearbyStations = rankedStations
+    .filter((station) => !selectedIds.has(station.id))
+    .slice(0, listLimit);
+
+  return {
+    bestStation,
+    backupStation,
+    nearbyStations,
+  };
+}
+
 export function buildStationSections(
   stations,
   {
@@ -583,21 +621,17 @@ export function buildStationSections(
     listLimit = 5,
   } = {},
 ) {
-  const rankedStations = sortStationsForDiscovery(stations);
-  const rankedBestCandidates = sortStationsForDiscovery(bestCandidates);
-  const reliableStations = [...rankedBestCandidates]
-    .filter(isReliableBestStation)
-    .sort(compareBestStationCandidates);
-  const bestStation = reliableStations[0] ?? null;
-  const backupStation = bestStation ? reliableStations[1] ?? null : null;
-  const rankedListCandidates = sortStationsForDiscovery(listCandidates);
-  const fallbackStations = rankedStations
-    .slice(0, listLimit)
-    .filter((station, index, array) => array.findIndex((item) => item.id === station.id) === index)
-    .filter((station) => station.id !== bestStation?.id && station.id !== backupStation?.id);
-  const nearbyPool = rankedListCandidates.filter(
-    (station) => station.id !== bestStation?.id && station.id !== backupStation?.id,
-  );
+  const rankedStations = sortStationsForRanking(stations);
+  const rankedListCandidates = sortStationsForRanking(listCandidates);
+  const rankedCandidateIds = new Set(bestCandidates.map((station) => station.id));
+  const rankedCandidates = rankedStations.filter((station) => rankedCandidateIds.has(station.id));
+  const {
+    bestStation,
+    backupStation,
+  } = rankStations(rankedCandidates, { listLimit });
+  const selectedIds = new Set([bestStation?.id, backupStation?.id].filter(Boolean));
+  const fallbackStations = rankedStations.filter((station) => !selectedIds.has(station.id));
+  const nearbyPool = rankedListCandidates.filter((station) => !selectedIds.has(station.id));
   const visibleNearbyStations = (nearbyPool.length ? nearbyPool : fallbackStations)
     .slice(0, listLimit)
     .map((station, index) => ({
@@ -678,32 +712,26 @@ function getBestStationTimestamp(station) {
   return station.lastUpdated ? new Date(station.lastUpdated).getTime() : 0;
 }
 
-function getConfidenceLevel({
-  recentReportsCount,
-  availableWeight,
-  noFuelWeight,
-  activeDevices,
-  activityLevel,
-  status,
-}) {
-  if (activeDevices >= 10 || (status === "available" && activeDevices >= 6)) {
-    return "high";
+export function getStationConfidenceSummary({
+  activeDevices = 0,
+  recentSignalsCount = 0,
+  lastUpdated = null,
+  now = new Date(),
+} = {}) {
+  const lastUpdateAgeMinutes = lastUpdated ? minutesSince(lastUpdated, now) : Number.POSITIVE_INFINITY;
+  const hasRecentSignalWithin30Minutes = lastUpdateAgeMinutes <= 30;
+  let level = "low";
+
+  if (activeDevices >= 5 || recentSignalsCount >= 3) {
+    level = "high";
+  } else if (activeDevices >= 2 || hasRecentSignalWithin30Minutes) {
+    level = "medium";
   }
 
-  if (activityLevel === "low" || recentReportsCount >= 1) {
-    return "medium";
-  }
-
-  if (status === "unknown" || recentReportsCount <= 1) {
-    return "low";
-  }
-
-  const weightGap = Math.abs(availableWeight - noFuelWeight);
-  if (recentReportsCount >= 3 && weightGap >= 0.6 && status !== "uncertain") {
-    return "high";
-  }
-
-  return "medium";
+  return {
+    level,
+    labelArabic: CONFIDENCE_LABELS_ARABIC[level],
+  };
 }
 
 function getRecommendationBadge(index) {
@@ -758,6 +786,16 @@ export function sortStationsForDiscovery(stations) {
   return [...stations].sort(compareNearbyStations);
 }
 
+export function sortStationsForSearch(stations) {
+  return [...stations].sort(compareSearchStations);
+}
+
+export function sortStationsForRanking(stations) {
+  return stations
+    .map(normalizeStationForRanking)
+    .sort(compareStationRankingCandidates);
+}
+
 export function matchesStationSearch(station, query) {
   const normalizedQuery = String(query ?? "").trim().toLowerCase();
   if (!normalizedQuery) {
@@ -797,6 +835,105 @@ export function compareNearbyStations(left, right) {
   }
 
   return getStationPriorityScore(right) - getStationPriorityScore(left);
+}
+
+function compareSearchStations(left, right) {
+  const statusDelta = getDisplayStatusRank(left) - getDisplayStatusRank(right);
+  if (statusDelta !== 0) {
+    return statusDelta;
+  }
+
+  const distanceDelta = (left.distanceKm ?? Number.POSITIVE_INFINITY) - (right.distanceKm ?? Number.POSITIVE_INFINITY);
+  if (distanceDelta !== 0) {
+    return distanceDelta;
+  }
+
+  const confidenceDelta = getConfidenceRank(right) - getConfidenceRank(left);
+  if (confidenceDelta !== 0) {
+    return confidenceDelta;
+  }
+
+  return getBestStationTimestamp(right) - getBestStationTimestamp(left);
+}
+
+function compareStationRankingCandidates(left, right) {
+  const closedDelta = getClosedStatusRank(left) - getClosedStatusRank(right);
+  if (closedDelta !== 0) {
+    return closedDelta;
+  }
+
+  const missingStatusDelta = getMissingStatusRank(left) - getMissingStatusRank(right);
+  if (missingStatusDelta !== 0) {
+    return missingStatusDelta;
+  }
+
+  const statusDelta = getDisplayStatusRank(left) - getDisplayStatusRank(right);
+  if (statusDelta !== 0) {
+    return statusDelta;
+  }
+
+  const distanceDelta = (left.distanceKm ?? Number.POSITIVE_INFINITY) - (right.distanceKm ?? Number.POSITIVE_INFINITY);
+  if (distanceDelta !== 0) {
+    return distanceDelta;
+  }
+
+  const freshnessDelta = getBestStationTimestamp(right) - getBestStationTimestamp(left);
+  if (freshnessDelta !== 0) {
+    return freshnessDelta;
+  }
+
+  const confidenceDelta = getConfidenceRank(right) - getConfidenceRank(left);
+  if (confidenceDelta !== 0) {
+    return confidenceDelta;
+  }
+
+  return getStationPriorityScore(right) - getStationPriorityScore(left);
+}
+
+function normalizeStationForRanking(station) {
+  const confidenceLevel = hasMissingStatusData(station)
+    ? "low"
+    : station.confidenceLevel ?? "low";
+  const confidenceLabelArabic = station.confidenceLabelArabic ?? CONFIDENCE_LABELS_ARABIC[confidenceLevel];
+
+  if (confidenceLevel === station.confidenceLevel && confidenceLabelArabic === station.confidenceLabelArabic) {
+    return station;
+  }
+
+  return {
+    ...station,
+    confidenceLevel,
+    confidenceLabelArabic,
+  };
+}
+
+function hasMissingStatusData(station) {
+  return (
+    !station?.status ||
+    station.status === "unknown" ||
+    station.status === "uncertain" ||
+    station.hasFreshSignal === false
+  );
+}
+
+function getMissingStatusRank(station) {
+  return hasMissingStatusData(station) ? 1 : 0;
+}
+
+function getClosedStatusRank(station) {
+  return getDisplayStatus(station) === "مسكر" ? 1 : 0;
+}
+
+function getConfidenceRank(station) {
+  if (station.confidenceLevel === "high") {
+    return 2;
+  }
+
+  if (station.confidenceLevel === "medium") {
+    return 1;
+  }
+
+  return 0;
 }
 
 export function getDisplayStatusRank(station) {
