@@ -1,25 +1,46 @@
 import {
+  buildStationSections,
   createReportRecord,
+  DEFAULT_DISCOVERY_RADIUS_KM,
+  findNearestStationWithinDistance,
   formatDistanceLabel,
+  getAreaOptions,
   getDemoReportPreset,
   getDemoUpdateDelayMs,
+  getDisplayStatus,
+  getLiveActivityLabel,
   getReportEligibility,
   getReportSuccessMessage,
+  getStationAreaLabel,
+  getStationUrgencyMessage,
+  matchesStationSearch,
+  PRESENCE_HEARTBEAT_MS,
   STATUS_META,
-  QUEUE_LABELS,
   formatRelativeTime,
   projectStations,
+  sortStationsForDiscovery,
 } from "./logic.mjs";
-import { filterStationsForList } from "./list-utils.mjs";
-import { getProtocolWarning } from "./environment-utils.mjs";
-import { getLeafletMarkerClass } from "./map-utils.mjs";
+import { getLocationModeConfig, getProtocolWarning } from "./environment-utils.mjs";
+import { buildDecisionFirstLayout } from "./home-layout-utils.mjs";
+import { getGoogleMapsUrl, getLeafletMarkerClass } from "./map-utils.mjs";
+import {
+  canNotifyStation,
+  getStationAvailabilityNotificationMessage,
+  markStationNotified,
+  notifyUser,
+  shouldNotifyAvailabilityChange,
+} from "./notification-utils.mjs";
+import { getAnonymousDeviceId } from "./presence-storage.mjs";
+import { createRepository } from "./repository.mjs";
+import { resolveSelectedStationId } from "./selection-utils.mjs";
 
 const tripoliCenter = {
   latitude: 32.8872,
   longitude: 13.1913,
 };
+const EXPANDED_DISCOVERY_RADIUS_KM = 15;
 
-const stations = [
+const fallbackStations = [
   {
     id: "station-1",
     name: "محطة السياحي",
@@ -59,25 +80,38 @@ const stations = [
 ];
 
 const now = Date.now();
-const reports = [
-  createSeedReport("station-1", "available", "short", now - 8 * 60000, stations[0]),
-  createSeedReport("station-1", "available", "medium", now - 20 * 60000, stations[0]),
-  createSeedReport("station-2", "available", "long", now - 12 * 60000, stations[1]),
-  createSeedReport("station-3", "no_fuel", "long", now - 10 * 60000, stations[2]),
-  createSeedReport("station-3", "available", "medium", now - 55 * 60000, stations[2]),
-  createSeedReport("station-4", "available", "medium", now - 18 * 60000, stations[3]),
-  createSeedReport("station-4", "available", "long", now - 6 * 60000, stations[3]),
-  createSeedReport("station-6", "available", "short", now - 80 * 60000, stations[5]),
+const demoSeedReports = [
+  createSeedReport("station-1", "available", "short", now - 8 * 60000, fallbackStations[0]),
+  createSeedReport("station-1", "available", "medium", now - 20 * 60000, fallbackStations[0]),
+  createSeedReport("station-2", "available", "long", now - 12 * 60000, fallbackStations[1]),
+  createSeedReport("station-3", "no_fuel", "long", now - 10 * 60000, fallbackStations[2]),
+  createSeedReport("station-3", "available", "medium", now - 55 * 60000, fallbackStations[2]),
+  createSeedReport("station-4", "available", "medium", now - 18 * 60000, fallbackStations[3]),
+  createSeedReport("station-4", "available", "long", now - 6 * 60000, fallbackStations[3]),
+  createSeedReport("station-6", "available", "short", now - 80 * 60000, fallbackStations[5]),
 ];
+
+let stations = [...fallbackStations];
+let persistedReports = [];
+let transientReports = [...demoSeedReports];
+let presenceRows = [];
 
 const state = {
   userLocation: tripoliCenter,
   hasUserLocation: false,
-  selectedStationId: stations[0]?.id ?? null,
+  selectedStationId: fallbackStations[0]?.id ?? null,
   shouldCenterSelectedOnMap: false,
   shouldCenterUserOnMap: false,
-  listFilterStatus: "all",
+  didAutoFocusBestStation: false,
+  activeTab: "home",
+  searchQuery: "",
+  selectedArea: "",
+  discoveryRadiusKm: DEFAULT_DISCOVERY_RADIUS_KM,
 };
+
+const repository = createRepository({
+  fallbackStations,
+});
 
 const stationMap = document.querySelector("#station-map");
 const mapFocusPill = document.querySelector("#map-focus-pill");
@@ -89,9 +123,16 @@ const stationDetails = document.querySelector("#station-details");
 const detailsPanel = document.querySelector(".details-panel");
 const environmentWarning = document.querySelector("#environment-warning");
 const locationBanner = document.querySelector("#location-banner");
-const listSummary = document.querySelector("#list-summary");
+const screenTitle = document.querySelector("#screen-title");
+const screenSubtitle = document.querySelector("#screen-subtitle");
 const listEmpty = document.querySelector("#list-empty");
-const listFilters = document.querySelector("#list-filters");
+const searchPrompt = document.querySelector("#search-prompt");
+const searchToolbar = document.querySelector("#search-toolbar");
+const showMoreButton = document.querySelector("#show-more-button");
+const stationSearchInput = document.querySelector("#station-search-input");
+const areaFilterContainer = document.querySelector("#area-filter-container");
+const areaFilterSelect = document.querySelector("#area-filter-select");
+const bottomNavItems = document.querySelectorAll("[data-tab]");
 const openReportModalButton = document.querySelector("#open-report-modal-button");
 const reportModalBackdrop = document.querySelector("#report-modal-backdrop");
 const closeReportModalButton = document.querySelector("#close-report-modal-button");
@@ -101,18 +142,17 @@ const reportModalStationName = document.querySelector("#report-modal-station-nam
 const reportForm = document.querySelector("#report-form");
 const reportSuccessToast = document.querySelector("#report-success-toast");
 const reportAccessMessage = document.querySelector("#report-access-message");
+const bottomNav = document.querySelector(".bottom-nav");
+const navIndicator = document.querySelector(".nav-indicator");
 
 const detailsFields = {
   distance: document.querySelector("#station-distance"),
   queue: document.querySelector("#station-queue"),
   updated: document.querySelector("#station-updated"),
   reports: document.querySelector("#station-reports"),
+  activityLabel: document.querySelector("#station-activity-label"),
+  activityCount: document.querySelector("#station-activity-count"),
 };
-
-const arabicNumberFormatter = new Intl.NumberFormat("ar-LY", {
-  maximumFractionDigits: 1,
-  minimumFractionDigits: 0,
-});
 
 const mapState = {
   instance: null,
@@ -122,21 +162,54 @@ const mapState = {
 };
 
 let demoUpdateTimerId = null;
+let presenceHeartbeatTimerId = null;
 let successToastTimerId = null;
+let latestProjectedStations = [];
+let hasStatusHistory = false;
+let previousStationStatusById = new Map();
+const anonymousDeviceId = getAnonymousDeviceId();
 
 renderEnvironmentWarning();
+await safeHydrateData();
 render();
-hydrateLocation();
+safeHydrateLocation();
 scheduleDemoUpdate();
+safeSubscribeToRealtime();
 
-listFilters.addEventListener("click", (event) => {
-  const filterButton = event.target.closest("[data-filter-status]");
-  if (!filterButton) {
+stationList.addEventListener("click", (event) => {
+  const target = event.target;
+  const stationMapAction = target.closest("[data-station-action='maps']");
+
+  if (!stationMapAction) {
     return;
   }
 
-  state.listFilterStatus = filterButton.dataset.filterStatus ?? "all";
-  render();
+  const stationCard = stationMapAction.closest("[data-station-id]");
+  if (!stationCard) {
+    return;
+  }
+
+  event.stopPropagation();
+  openStationInGoogleMaps(stationCard.dataset.stationId);
+});
+
+stationList.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  const stationButton = event.target.closest("[data-station-action='maps']");
+  if (!stationButton) {
+    return;
+  }
+
+  const stationCard = stationButton.closest("[data-station-id]");
+  if (!stationCard) {
+    return;
+  }
+
+  event.preventDefault();
+  openStationInGoogleMaps(stationCard.dataset.stationId);
 });
 
 recenterUserButton.addEventListener("click", () => {
@@ -176,6 +249,39 @@ document.addEventListener("keydown", (event) => {
 });
 
 reportForm.addEventListener("submit", (event) => {
+  void handleReportSubmit(event);
+});
+
+stationSearchInput.addEventListener("input", (event) => {
+  state.searchQuery = event.target.value.trim();
+  state.didAutoFocusBestStation = false;
+  render();
+});
+
+areaFilterSelect.addEventListener("change", (event) => {
+  state.selectedArea = event.target.value;
+  state.didAutoFocusBestStation = false;
+  render();
+});
+
+showMoreButton.addEventListener("click", () => {
+  state.discoveryRadiusKm = EXPANDED_DISCOVERY_RADIUS_KM;
+  render();
+});
+
+bottomNavItems.forEach((item) => {
+  item.addEventListener("click", () => {
+    const nextTab = item.dataset.tab;
+    if (!nextTab || state.activeTab === nextTab) {
+      return;
+    }
+
+    state.activeTab = nextTab;
+    render();
+  });
+});
+
+async function handleReportSubmit(event) {
   event.preventDefault();
 
   const selectedStation = getSelectedStation();
@@ -183,44 +289,98 @@ reportForm.addEventListener("submit", (event) => {
     return;
   }
 
-  const reportEligibility = getReportEligibility({
-    userLocation: state.userLocation,
+  const formData = new FormData(reportForm);
+  const newReport = createReportRecord({
+    stationId: selectedStation.id,
+    status: formData.get("status"),
+    queueLevel: formData.get("queueLevel"),
     station: selectedStation,
-    hasUserLocation: state.hasUserLocation,
   });
 
-  if (!reportEligibility.canSubmit) {
-    reportAccessMessage.textContent = reportEligibility.message;
-    return;
-  }
+  await repository.submitReport(newReport, state.hasUserLocation ? state.userLocation : null);
+  persistedReports = await repository.getRecentReports();
 
-  const formData = new FormData(reportForm);
-  reports.push(
-    createReportRecord({
-      stationId: selectedStation.id,
-      status: formData.get("status"),
-      queueLevel: formData.get("queueLevel"),
-      station: selectedStation,
-    }),
-  );
-
-  const updatedStation = projectStations(stations, reports, state.userLocation, new Date()).find(
+  const updatedStation = projectStations(
+    stations,
+    getAllReports(),
+    state.userLocation,
+    presenceRows,
+    new Date(),
+  ).find(
     (station) => station.id === selectedStation.id,
   );
 
   closeReportModal();
   showSuccessToast(
-    getReportSuccessMessage(
+    `${getReportSuccessMessage(
       selectedStation.name,
-      updatedStation ? STATUS_META[updatedStation.status].label : "",
-    ),
+      updatedStation ? getDisplayStatus(updatedStation) : "",
+    )} · شكراً على مساهمتك`,
   );
   render();
-});
+}
+
+async function handleRealtimeInsert() {
+  try {
+    persistedReports = await repository.getRecentReports();
+    presenceRows = await repository.getRecentPresence();
+  } catch {
+    presenceRows = [];
+  }
+  state.didAutoFocusBestStation = false;
+  render();
+  showSuccessToast("تم وصول بلاغ جديد");
+}
 
 function render() {
-  const projectedStations = projectStations(stations, reports, state.userLocation, new Date());
-  const filteredStations = filterStationsForList(projectedStations, state.listFilterStatus);
+  const now = new Date();
+  const projectedStations = projectStations(stations, getAllReports(), state.userLocation, presenceRows, now);
+  projectedStations.forEach((station) => {
+    console.info(
+      `[Status] ${station.name} | activeDevices: ${station.activeDevices ?? 0} | final status: ${getDisplayStatus(station)}`,
+    );
+  });
+  processStationNotifications(projectedStations, now);
+  latestProjectedStations = projectedStations;
+  const areaOptions = getAreaOptions(projectedStations);
+  syncAreaFilter(areaOptions);
+
+  const hasSearch = Boolean(state.searchQuery);
+  const nearbyRadiusKm = state.discoveryRadiusKm;
+  const radiusStations = projectedStations.filter((station) => station.distanceKm <= nearbyRadiusKm);
+  const nearbyBaseStations = radiusStations;
+  const discoveryBaseStations = hasSearch ? projectedStations : nearbyBaseStations;
+  const areaScopedStations = state.selectedArea
+    ? discoveryBaseStations.filter((station) => getStationAreaLabel(station) === state.selectedArea)
+    : discoveryBaseStations;
+  const searchedStations = areaScopedStations.filter((station) => matchesStationSearch(station, state.searchQuery));
+  const discoveryStations = searchedStations.length || hasSearch || state.selectedArea
+    ? searchedStations
+    : nearbyBaseStations;
+  const bestStationCandidates = hasSearch
+    ? discoveryStations
+    : discoveryStations.filter((station) => station.distanceKm <= nearbyRadiusKm);
+  const canExpandRadius = !hasSearch &&
+    state.activeTab === "home" &&
+    state.discoveryRadiusKm < EXPANDED_DISCOVERY_RADIUS_KM &&
+    projectedStations.some(
+      (station) =>
+        station.distanceKm > state.discoveryRadiusKm &&
+        station.distanceKm <= EXPANDED_DISCOVERY_RADIUS_KM,
+    );
+  const stationSections = buildStationSections(projectedStations, {
+    bestCandidates: bestStationCandidates,
+    listCandidates: discoveryStations,
+    listLimit: 5,
+  });
+  const renderedStationCount =
+    stationSections.recommendedStations.length +
+    stationSections.nearbyStations.length +
+    stationSections.avoidStations.length;
+
+  console.info(
+    `[Home] total stations loaded: ${projectedStations.length}, rendered station count: ${renderedStationCount}, best station found: ${stationSections.bestStation ? "yes" : "no"}`,
+  );
 
   if (!projectedStations.length) {
     stationList.innerHTML = "";
@@ -228,26 +388,33 @@ function render() {
     ensureMap();
     centerMapOn(tripoliCenter, 11);
     mapFocusPill.textContent = "الخريطة على طرابلس";
-    listSummary.textContent = "لا توجد محطات محملة.";
     listEmpty.classList.remove("hidden");
+    searchPrompt.classList.add("hidden");
     renderStationDetails(null);
     return;
   }
 
-  updateFilterChips();
   updateMapActionButtons();
-  listSummary.textContent = getListSummaryText(filteredStations.length, projectedStations.length);
+  syncActiveTabUi();
 
-  if (!projectedStations.some((station) => station.id === state.selectedStationId)) {
-    state.selectedStationId = projectedStations[0].id;
+  if (stationSections.bestStation && !state.didAutoFocusBestStation) {
+    state.selectedStationId = stationSections.bestStation.id;
+    state.shouldCenterSelectedOnMap = true;
+    state.didAutoFocusBestStation = true;
+  } else {
+    state.selectedStationId = resolveSelectedStationId(state.selectedStationId, projectedStations);
   }
 
-  renderMap(projectedStations);
-  renderStationList(filteredStations);
+  renderStationList({
+    stationSections,
+    searchResults: searchedStations,
+    hasSearch,
+    canExpandRadius,
+  });
   renderStationDetails(projectedStations.find((station) => station.id === state.selectedStationId));
 }
 
-function renderMap(projectedStations) {
+function renderMap(projectedStations, bestStation) {
   ensureMap();
 
   if (!mapState.instance) {
@@ -255,7 +422,7 @@ function renderMap(projectedStations) {
   }
 
   mapState.instance.invalidateSize(false);
-  syncMapMarkers(projectedStations);
+  syncMapMarkers(projectedStations, bestStation);
 
   if (!mapState.hasInitialView) {
     centerMapOn(tripoliCenter, 11);
@@ -284,68 +451,275 @@ function renderMap(projectedStations) {
     state.shouldCenterSelectedOnMap = false;
   }
 
-  mapFocusPill.textContent = `${selectedStation.name} · ${STATUS_META[selectedStation.status].label}`;
+  mapFocusPill.textContent = `${selectedStation.name} · ${getDisplayStatus(selectedStation)}`;
 }
 
-function renderStationList(projectedStations) {
+function renderStationList({ stationSections, searchResults, hasSearch, canExpandRadius = false }) {
   stationList.innerHTML = "";
+  searchPrompt.classList.add("hidden");
   const template = document.querySelector("#station-card-template");
+  const { bestStation, recommendedStations, nearbyStations, avoidStations } = stationSections;
 
-  if (!projectedStations.length) {
-    listEmpty.textContent = "لا توجد محطات ضمن هذا التصنيف حالياً.";
+  if (state.activeTab === "search") {
+    renderSearchResults({
+      stations: searchResults,
+      hasSearch,
+      template,
+    });
+    showMoreButton.classList.add("hidden");
+    return;
+  }
+
+  const layout = buildDecisionFirstLayout({
+    bestStation,
+    recommendedStations,
+    nearbyStations,
+    avoidStations,
+  }, 3);
+  if (!layout.nearbyVisible.length && !layout.heroStation) {
+    layout.nearbyVisible = [...recommendedStations, ...nearbyStations, ...avoidStations].slice(0, 5);
+  }
+
+  const totalVisibleStations =
+    (layout.heroStation ? 1 : 0) +
+    (layout.backupStation ? 1 : 0) +
+    layout.nearbyVisible.length +
+    layout.otherStations.length;
+
+  if (!totalVisibleStations) {
+    listEmpty.textContent = "لا توجد محطات متاحة حالياً.";
     listEmpty.classList.remove("hidden");
+    showMoreButton.classList.toggle("hidden", !canExpandRadius);
     return;
   }
 
   listEmpty.textContent = "لا توجد محطات متاحة حالياً.";
   listEmpty.classList.add("hidden");
 
-  projectedStations.forEach((station) => {
-    const fragment = template.content.cloneNode(true);
-    const card = fragment.querySelector(".station-card");
-    const title = fragment.querySelector(".station-card-title");
-    const distance = fragment.querySelector(".station-card-distance");
-    const badge = fragment.querySelector(".status-badge");
-    const queue = fragment.querySelector(".queue-pill");
-    const updated = fragment.querySelector(".station-card-updated");
-
-    title.textContent = station.name;
-    distance.textContent = formatDistanceLabel(station.distanceKm);
-    badge.textContent = STATUS_META[station.status].label;
-    badge.classList.add(STATUS_META[station.status].className);
-    queue.textContent = `الزحمة: ${QUEUE_LABELS[station.queueLevel]}`;
-    updated.textContent = formatRelativeTime(station.lastUpdated);
-    card.dataset.stationId = station.id;
-
-    if (station.id === state.selectedStationId) {
-      card.classList.add("station-card-active");
-    }
-
-    card.addEventListener("click", () => {
-      state.selectedStationId = station.id;
-      state.shouldCenterSelectedOnMap = true;
-      render();
-      revealSelection({ showDetails: true, showCard: false });
-    });
-
-    stationList.append(fragment);
-  });
-}
-
-function updateFilterChips() {
-  listFilters.querySelectorAll("[data-filter-status]").forEach((button) => {
-    const isActive = button.dataset.filterStatus === state.listFilterStatus;
-    button.classList.toggle("filter-chip-active", isActive);
-    button.setAttribute("aria-pressed", isActive ? "true" : "false");
-  });
-}
-
-function getListSummaryText(filteredCount, totalCount) {
-  if (filteredCount === totalCount) {
-    return `${formatArabicNumber(totalCount)} محطة مرتبة حسب القرب`;
+  if (layout.heroStation) {
+    stationList.append(createHeroSection(layout.heroStation, template));
   }
 
-  return `${formatArabicNumber(filteredCount)} من أصل ${formatArabicNumber(totalCount)} محطة`;
+  if (layout.backupStation) {
+    stationList.append(createBackupSection(layout.backupStation, template));
+  }
+
+  if (layout.nearbyVisible.length) {
+    stationList.append(
+      createSectionBlock({
+        title: "محطات قريبة أخرى",
+        tone: "nearby",
+        stations: layout.nearbyVisible,
+        template,
+        variant: "compact",
+      }),
+    );
+  }
+
+  if (layout.otherStations.length) {
+    stationList.append(createOtherSectionBlock(layout.otherStations, template));
+  }
+
+  showMoreButton.classList.toggle("hidden", !canExpandRadius);
+}
+
+function renderSearchResults({ stations, hasSearch, template }) {
+  if (!hasSearch) {
+    listEmpty.classList.add("hidden");
+    searchPrompt.classList.remove("hidden");
+    return;
+  }
+
+  if (!stations.length) {
+    searchPrompt.classList.add("hidden");
+    listEmpty.textContent = "لا توجد نتائج مطابقة";
+    listEmpty.classList.remove("hidden");
+    return;
+  }
+
+  searchPrompt.classList.add("hidden");
+  listEmpty.classList.add("hidden");
+  stationList.append(
+    createSectionBlock({
+      tone: "search",
+      stations,
+      template,
+      variant: "compact",
+      hideHeader: true,
+    }),
+  );
+}
+
+function createHeroSection(station, template) {
+  const section = document.createElement("section");
+  section.className = "station-group station-group-hero";
+
+  const header = document.createElement("div");
+  header.className = "station-group-header";
+  header.innerHTML = `
+    <div>
+      <p class="section-label">الأفضل الآن</p>
+      <h3 class="station-group-title">👑 الأفضل الآن</h3>
+    </div>
+  `;
+  section.append(header);
+
+  const cards = document.createElement("div");
+  cards.className = "station-group-list station-group-list-hero";
+  cards.append(
+    createStationCard(
+      { ...station, recommendationBadge: "أفضل خيار" },
+      template,
+      "recommended",
+      "hero",
+    ),
+  );
+  section.append(cards);
+
+  return section;
+}
+
+function createBackupSection(station, template) {
+  const section = document.createElement("section");
+  section.className = "station-group station-group-backup";
+
+  const header = document.createElement("div");
+  header.className = "station-group-header";
+  header.innerHTML = `
+    <div>
+      <p class="section-label">خيار احتياطي</p>
+      <h3 class="station-group-title">خيار احتياطي</h3>
+    </div>
+  `;
+  section.append(header);
+
+  const cards = document.createElement("div");
+  cards.className = "station-group-list station-group-list-compact";
+  cards.append(
+    createStationCard(
+      { ...station, recommendationBadge: "الخيار الثاني" },
+      template,
+      "backup",
+      "backup",
+    ),
+  );
+  section.append(cards);
+
+  return section;
+}
+
+function createSectionBlock({
+  title = "",
+  description = "",
+  tone,
+  stations,
+  template,
+  variant = "default",
+  hideHeader = false,
+}) {
+  const section = document.createElement("section");
+  section.className = `station-group station-group-${tone}`;
+
+  if (!hideHeader && (title || description)) {
+    const header = document.createElement("div");
+    header.className = "station-group-header";
+    header.innerHTML = `
+      <div>
+        ${title ? `<h3 class="station-group-title">${title}</h3>` : ""}
+        ${description ? `<p class="station-group-copy">${description}</p>` : ""}
+      </div>
+    `;
+    section.append(header);
+  }
+
+  const cards = document.createElement("div");
+  cards.className = `station-group-list station-group-list-${variant}`;
+  stations.forEach((station) => {
+    cards.append(createStationCard(station, template, tone, variant));
+  });
+  section.append(cards);
+
+  return section;
+}
+
+function createOtherSectionBlock(stations, template) {
+  const details = document.createElement("details");
+  details.className = "station-group station-group-avoid";
+
+  const summary = document.createElement("summary");
+  summary.className = "station-group-summary";
+  summary.innerHTML = `<span class="station-group-link">عرض باقي المحطات</span>`;
+  details.append(summary);
+
+  const cards = document.createElement("div");
+  cards.className = "station-group-list station-group-list-compact station-group-list-avoid";
+  stations.forEach((station) => {
+    cards.append(createStationCard(station, template, "avoid", "compact"));
+  });
+  details.append(cards);
+
+  return details;
+}
+
+function createStationCard(station, template, tone, variant = "default") {
+    const fragment = template.content.cloneNode(true);
+    const card = fragment.querySelector(".station-card");
+    const top = fragment.querySelector(".station-card-top");
+    const title = fragment.querySelector(".station-card-title");
+    const status = fragment.querySelector(".station-card-status");
+    const distance = fragment.querySelector(".station-card-distance");
+    const queue = fragment.querySelector(".queue-pill");
+    const updated = fragment.querySelector(".station-card-updated");
+    const reports = fragment.querySelector(".station-card-reports");
+    const activity = fragment.querySelector(".station-card-activity");
+    const mapsAction = fragment.querySelector("[data-station-action='maps']");
+
+    title.textContent = station.name;
+    status.textContent = getDisplayStatus(station);
+    status.classList.add(`station-card-status-${station.status}`);
+    distance.textContent = formatDistanceLabel(station.distanceKm);
+    queue.textContent = getDriverFlowLabel(station);
+    updated.textContent = getStationUpdatedText(station);
+    reports.textContent = "";
+    activity.textContent = "";
+    mapsAction.textContent = "افتح في خرائط Google";
+    card.dataset.stationId = station.id;
+    card.dataset.stationTone = tone;
+    card.dataset.stationVariant = variant;
+
+    if (tone === "recommended") {
+      card.classList.add("station-card-recommended");
+      card.classList.add("station-card-best");
+      top.insertAdjacentHTML(
+        "afterbegin",
+        `<div class="station-card-crown" aria-label="الأفضل الآن"><span>👑</span><span>الأفضل الآن</span></div>`,
+      );
+    }
+
+    if (tone === "backup") {
+      card.classList.add("station-card-backup");
+    }
+
+    if (station.recommendationBadge) {
+      title.insertAdjacentHTML(
+        "beforebegin",
+        `<span class="station-card-badge">${station.recommendationBadge}</span>`,
+      );
+    }
+
+    if (variant === "hero") {
+      card.classList.add("station-card-hero");
+    }
+
+    if (variant === "backup") {
+      card.classList.add("station-card-backup-variant");
+    }
+
+    if (variant === "compact") {
+      card.classList.add("station-card-compact");
+    }
+
+    return fragment;
 }
 
 function updateMapActionButtons() {
@@ -357,7 +731,7 @@ function renderStationDetails(station) {
     stationEmpty.classList.remove("hidden");
     stationDetails.classList.add("hidden");
     stationTitle.textContent = "اختر محطة";
-    stationStatusBadge.textContent = "غير معروف";
+    stationStatusBadge.textContent = "مسكر";
     stationStatusBadge.className = "status-badge status-unknown";
     openReportModalButton.disabled = true;
     reportAccessMessage.textContent = "";
@@ -368,14 +742,17 @@ function renderStationDetails(station) {
   stationDetails.classList.remove("hidden");
 
   stationTitle.textContent = station.name;
-  stationStatusBadge.textContent = STATUS_META[station.status].label;
+  stationStatusBadge.textContent = getDisplayStatus(station);
   stationStatusBadge.className = `status-badge ${STATUS_META[station.status].className}`;
 
   detailsFields.distance.textContent = formatDistanceLabel(station.distanceKm);
-  detailsFields.queue.textContent = QUEUE_LABELS[station.queueLevel];
-  detailsFields.updated.textContent = formatRelativeTime(station.lastUpdated);
-  detailsFields.reports.textContent =
-    `${formatArabicNumber(station.recentReportsCount)} خلال آخر ٦٠ دقيقة`;
+  detailsFields.queue.textContent = getDriverFlowLabel(station);
+  detailsFields.updated.textContent = getStationUpdatedText(station);
+  detailsFields.reports.textContent = getDriverTrustLabel(station);
+  detailsFields.activityLabel.textContent = getStationActivityText(station);
+  detailsFields.activityCount.textContent = (station.activeDevices ?? 0) > 0
+    ? `${getLiveActivityLabel(station.activeDevices)} · مباشر الآن`
+    : "0";
 
   const reportEligibility = getReportEligibility({
     userLocation: state.userLocation,
@@ -383,19 +760,119 @@ function renderStationDetails(station) {
     hasUserLocation: state.hasUserLocation,
   });
 
-  openReportModalButton.disabled = !reportEligibility.canSubmit;
+  openReportModalButton.disabled = false;
   reportAccessMessage.textContent = reportEligibility.message;
 }
 
+function syncAreaFilter(areaOptions) {
+  if (state.activeTab !== "search") {
+    areaFilterContainer.classList.add("hidden");
+    return;
+  }
+
+  if (!areaOptions.length) {
+    areaFilterContainer.classList.add("hidden");
+    areaFilterSelect.value = "";
+    state.selectedArea = "";
+    return;
+  }
+
+  areaFilterContainer.classList.remove("hidden");
+  const currentOptions = new Set([...areaFilterSelect.options].map((option) => option.value));
+  const hasChanged =
+    areaOptions.length !== areaFilterSelect.options.length - 1 ||
+    areaOptions.some((option) => !currentOptions.has(option));
+
+  if (hasChanged) {
+    areaFilterSelect.innerHTML = `<option value="">كل المناطق</option>${areaOptions
+      .map((option) => `<option value="${option}">${option}</option>`)
+      .join("")}`;
+  }
+
+  if (state.selectedArea && !areaOptions.includes(state.selectedArea)) {
+    state.selectedArea = "";
+  }
+
+  areaFilterSelect.value = state.selectedArea;
+}
+
+function syncActiveTabUi() {
+  const isSearchTab = state.activeTab === "search";
+
+  screenTitle.textContent = isSearchTab ? "البحث" : "أقرب المحطات";
+  screenSubtitle.textContent = isSearchTab
+    ? "ابحث عن المحطة أو المنطقة المناسبة"
+    : "اختر المحطة المناسبة وافتحها في خرائط Google";
+
+  searchToolbar.classList.toggle("hidden", !isSearchTab);
+  if (!isSearchTab) {
+    searchPrompt.classList.add("hidden");
+  }
+
+  bottomNavItems.forEach((item) => {
+    const isActive = item.dataset.tab === state.activeTab;
+    item.classList.toggle("active", isActive);
+    item.setAttribute("aria-current", isActive ? "page" : "false");
+  });
+
+  if (navIndicator) {
+    navIndicator.style.transform = isSearchTab
+      ? "translateX(calc(-100% - 12px))"
+      : "translateX(0)";
+  }
+
+  if (bottomNav) {
+    bottomNav.dataset.activeTab = state.activeTab;
+  }
+}
+
+function openStationInGoogleMaps(stationId) {
+  const station = latestProjectedStations.find((item) => item.id === stationId)
+    ?? stations.find((item) => item.id === stationId);
+  if (!station) {
+    return;
+  }
+
+  window.open(getGoogleMapsUrl(station), "_blank", "noopener");
+  showSuccessToast("تم فتح الخريطة. رحلة موفقة");
+}
+
 function hydrateLocation() {
+  const locationModeConfig = getLocationModeConfig();
+
+  if (locationModeConfig.useFakeLocation) {
+    if (locationModeConfig.hasValidFakeLocation) {
+      state.userLocation = {
+        latitude: locationModeConfig.latitude,
+        longitude: locationModeConfig.longitude,
+      };
+      state.hasUserLocation = true;
+      state.shouldCenterUserOnMap = true;
+      state.didAutoFocusBestStation = false;
+      locationBanner.textContent = "وضع الاختبار: يتم استخدام موقع وهمي";
+      safeStartPresenceHeartbeat();
+      render();
+      return;
+    }
+
+    state.userLocation = tripoliCenter;
+    state.hasUserLocation = false;
+    stopPresenceHeartbeat();
+    locationBanner.textContent = "وضع الاختبار: الإحداثيات الوهمية غير صالحة، يتم استخدام وسط طرابلس.";
+    render();
+    return;
+  }
+
   if (window.location.protocol === "file:") {
     state.hasUserLocation = false;
+    stopPresenceHeartbeat();
     locationBanner.textContent = "شغّل التطبيق من localhost حتى يعمل طلب الموقع في المتصفح.";
     render();
     return;
   }
 
   if (!("geolocation" in navigator)) {
+    stopPresenceHeartbeat();
     locationBanner.textContent = "الموقع غير متاح في هذا المتصفح. يتم استخدام وسط طرابلس كموقع افتراضي.";
     render();
     return;
@@ -409,11 +886,14 @@ function hydrateLocation() {
       };
       state.hasUserLocation = true;
       state.shouldCenterUserOnMap = true;
+      state.didAutoFocusBestStation = false;
       locationBanner.textContent = "تم تحديد موقعك الحالي. يتم ترتيب المحطات وعرض موقعك على الخريطة.";
+      safeStartPresenceHeartbeat();
       render();
     },
     () => {
       state.hasUserLocation = false;
+      stopPresenceHeartbeat();
       locationBanner.textContent = "تم رفض إذن الموقع. يتم استخدام وسط طرابلس كموقع افتراضي.";
       render();
     },
@@ -435,23 +915,13 @@ function openReportModal() {
     return;
   }
 
-  const reportEligibility = getReportEligibility({
-    userLocation: state.userLocation,
-    station: selectedStation,
-    hasUserLocation: state.hasUserLocation,
-  });
-
-  if (!reportEligibility.canSubmit) {
-    reportAccessMessage.textContent = reportEligibility.message;
-    return;
-  }
-
   reportModalStationName.textContent = selectedStation.name;
   reportForm.reset();
   reportForm.elements.status.value = "available";
   reportForm.elements.queueLevel.value = "short";
   reportModalBackdrop.classList.remove("hidden");
   document.body.classList.add("modal-open");
+  showSuccessToast("وجودك يساعد تحسين دقة البيانات");
 }
 
 function closeReportModal() {
@@ -469,8 +939,80 @@ function showSuccessToast(message) {
   }, 2600);
 }
 
-function formatArabicNumber(value) {
-  return arabicNumberFormatter.format(value);
+function getStationUpdatedText(station) {
+  const urgencyMessage = getStationUrgencyMessage(station);
+  if (urgencyMessage) {
+    return urgencyMessage.replace("كانت شغالة قبل", "تم التحديث منذ");
+  }
+
+  const relativeTime = formatRelativeTime(station.lastUpdated).replace("آخر تحديث: منذ", "تم التحديث منذ");
+  if (station.signalNote) {
+    return `${relativeTime} · قديمة نسبياً`;
+  }
+
+  return relativeTime;
+}
+
+function getStationActivityText(station) {
+  if ((station.activeDevices ?? 0) > 0) {
+    return `${getLiveActivityLabel(station.activeDevices)} · مباشر الآن`;
+  }
+
+  if (station.status === "busy") {
+    return "زحمة";
+  }
+
+  if (station.status === "no_fuel") {
+    return "مسكر";
+  }
+
+  return "مسكر";
+}
+
+function getDriverFlowLabel(station) {
+  return getDisplayStatus(station);
+}
+
+function getDriverTrustLabel(station) {
+  if (station.confidenceLevel === "high") {
+    return "واضحة";
+  }
+
+  if (station.confidenceLevel === "medium") {
+    return "مقبولة";
+  }
+
+  return "خفيفة";
+}
+
+function processStationNotifications(projectedStations, now = new Date()) {
+  const nextStatusById = new Map(projectedStations.map((station) => [station.id, station.status]));
+
+  if (!hasStatusHistory) {
+    previousStationStatusById = nextStatusById;
+    hasStatusHistory = true;
+    return;
+  }
+
+  projectedStations.forEach((station) => {
+    const previousStatus = previousStationStatusById.get(station.id);
+    if (!shouldNotifyAvailabilityChange(previousStatus, station.status)) {
+      return;
+    }
+
+    if (!canNotifyStation(station.id, now)) {
+      return;
+    }
+
+    notifyUser(station, getStationAvailabilityNotificationMessage(station), {
+      showToast(message) {
+        showSuccessToast(message);
+      },
+    });
+    markStationNotified(station.id, now);
+  });
+
+  previousStationStatusById = nextStatusById;
 }
 
 function renderEnvironmentWarning() {
@@ -545,7 +1087,7 @@ function syncUserMarker() {
   mapState.userMarker.setLatLng([state.userLocation.latitude, state.userLocation.longitude]);
 }
 
-function syncMapMarkers(projectedStations) {
+function syncMapMarkers(projectedStations, bestStation) {
   if (!mapState.instance) {
     return;
   }
@@ -553,11 +1095,13 @@ function syncMapMarkers(projectedStations) {
   clearMapMarkers();
 
   projectedStations.forEach((station) => {
+    const markerEmphasis = bestStation?.id === station.id ? "best" : "dim";
     const marker = window.L.marker([station.latitude, station.longitude], {
       icon: window.L.divIcon({
         className: getLeafletMarkerClass(
           station.status,
           station.id === state.selectedStationId,
+          markerEmphasis,
         ),
         html: "<span></span>",
         iconSize: [22, 22],
@@ -567,10 +1111,11 @@ function syncMapMarkers(projectedStations) {
     }).addTo(mapState.instance);
 
     marker.on("click", () => {
-      state.selectedStationId = station.id;
-      state.shouldCenterSelectedOnMap = true;
-      render();
-      revealSelection({ showDetails: true, showCard: true });
+      selectStation(station.id, {
+        centerMap: true,
+        showDetails: true,
+        showCard: true,
+      });
     });
 
     mapState.markers.push(marker);
@@ -613,6 +1158,18 @@ function revealSelection({ showDetails = false, showCard = false } = {}) {
   });
 }
 
+function selectStation(stationId, { centerMap = false, showDetails = false, showCard = false } = {}) {
+  const nextStationId = resolveSelectedStationId(stationId, latestProjectedStations);
+  if (!nextStationId || nextStationId !== stationId) {
+    return;
+  }
+
+  state.selectedStationId = nextStationId;
+  state.shouldCenterSelectedOnMap = centerMap;
+  render();
+  revealSelection({ showDetails, showCard });
+}
+
 function scheduleDemoUpdate() {
   window.clearTimeout(demoUpdateTimerId);
   demoUpdateTimerId = window.setTimeout(() => {
@@ -629,7 +1186,7 @@ function applyDemoUpdate() {
   const station = stations[Math.floor(Math.random() * stations.length)];
   const preset = getDemoReportPreset();
 
-  reports.push(
+  transientReports.push(
     createReportRecord({
       stationId: station.id,
       status: preset.status,
@@ -639,6 +1196,102 @@ function applyDemoUpdate() {
   );
 
   render();
+}
+
+async function hydrateData() {
+  stations = await repository.getStations();
+  persistedReports = await repository.getRecentReports();
+  presenceRows = await repository.getRecentPresence();
+}
+
+function getAllReports() {
+  return [...transientReports, ...persistedReports];
+}
+
+function startPresenceHeartbeat() {
+  if (!state.hasUserLocation) {
+    return;
+  }
+
+  stopPresenceHeartbeat();
+  void sendPresenceHeartbeat();
+  presenceHeartbeatTimerId = window.setInterval(() => {
+    void sendPresenceHeartbeat();
+  }, PRESENCE_HEARTBEAT_MS);
+}
+
+function stopPresenceHeartbeat() {
+  window.clearInterval(presenceHeartbeatTimerId);
+  presenceHeartbeatTimerId = null;
+}
+
+async function sendPresenceHeartbeat() {
+  if (!state.hasUserLocation) {
+    return;
+  }
+
+  try {
+    const nearestStation = findNearestStationWithinDistance(state.userLocation, stations);
+    if (!nearestStation) {
+      presenceRows = await repository.getRecentPresence();
+      render();
+      return;
+    }
+
+    await repository.submitPresenceHeartbeat({
+      stationId: nearestStation.station.id,
+      deviceId: anonymousDeviceId,
+      latitude: state.userLocation.latitude,
+      longitude: state.userLocation.longitude,
+      distanceToStationMeters: Math.round(nearestStation.distanceKm * 1000),
+      lastSeenAt: new Date().toISOString(),
+    });
+    presenceRows = await repository.getRecentPresence();
+    render();
+  } catch {
+    presenceRows = [];
+    render();
+  }
+}
+
+async function safeHydrateData() {
+  try {
+    await hydrateData();
+  } catch {
+    stations = [...fallbackStations];
+    persistedReports = [];
+    presenceRows = [];
+  }
+}
+
+function safeHydrateLocation() {
+  try {
+    hydrateLocation();
+  } catch {
+    state.userLocation = tripoliCenter;
+    state.hasUserLocation = false;
+    stopPresenceHeartbeat();
+    locationBanner.textContent = "تعذر تهيئة الموقع الآن. يتم استخدام وسط طرابلس.";
+    render();
+  }
+}
+
+function safeStartPresenceHeartbeat() {
+  try {
+    startPresenceHeartbeat();
+  } catch {
+    stopPresenceHeartbeat();
+  }
+}
+
+function safeSubscribeToRealtime() {
+  try {
+    repository.subscribeToReportInserts(() => {
+      void handleRealtimeInsert();
+    });
+  } catch {
+    // Keep the app interactive even if realtime setup fails.
+  }
 }
 
 function createSeedReport(stationId, status, queueLevel, timestamp, station) {

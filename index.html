@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>بنزينة</title>
+    <title>Shale</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23114c57'/%3E%3Cpath d='M22 16h15c6.627 0 12 5.373 12 12v20c0 1.105-.895 2-2 2h-5a2 2 0 0 1-2-2v-8H24v8a2 2 0 0 1-2 2h-5c-1.105 0-2-.895-2-2V23c0-3.866 3.134-7 7-7Zm2 8v8h16v-4c0-2.209-1.791-4-4-4H24Z' fill='%23fffaf1'/%3E%3C/svg%3E"
@@ -24,151 +24,180 @@
   </head>
   <body>
     <div class="app-backdrop"></div>
-    <div class="app-shell">
-      <header class="hero">
-        <div class="hero-topbar">
-          <div>
-            <p class="eyebrow">نسخة أولية للموبايل</p>
-            <h1>بنزينة</h1>
-          </div>
-          <div class="hero-avatar" aria-hidden="true">بن</div>
-        </div>
+    <div class="phone-preview">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="app-shell">
+            <main class="app-content">
+              <header class="hero">
+                <p class="eyebrow">نسخة أولية للموبايل</p>
+                <h1>أقرب المحطات</h1>
+              </header>
 
-        <div class="hero-summary">
-          <p class="hero-copy">اعرف وين تلقى بنزينة وفوت الزحمة</p>
-        </div>
+              <div class="layout">
+                <div class="environment-warning hidden" id="environment-warning" role="alert"></div>
 
-        <div class="hero-meta">
-          <div class="hero-pill">
-            <span class="pill-label">مدة التحديث</span>
-            <strong>آخر 60 دقيقة</strong>
-          </div>
-          <div class="hero-pill">
-            <span class="pill-label">المنصة</span>
-            <strong>تجربة أولية لـ iOS وأندرويد</strong>
-          </div>
-        </div>
-      </header>
+                <section class="panel map-panel home-screen-hidden" hidden aria-hidden="true">
+                <div class="panel-heading">
+                  <div>
+                    <p class="section-label">الخريطة</p>
+                    <h2>المحطات القريبة</h2>
+                  </div>
+                  <p class="panel-copy">النموذج الحالي للويب فقط لاختبار الفكرة على الموبايل.</p>
+                </div>
 
-      <main class="layout">
-        <div class="environment-warning hidden" id="environment-warning" role="alert"></div>
+                <div class="legend" aria-label="حالات المحطات">
+                  <span><i class="dot green"></i>عالبومبة طول</span>
+                  <span><i class="dot yellow"></i>طابور خفيف</span>
+                  <span><i class="dot red"></i>زحمة</span>
+                  <span><i class="dot gray"></i>مسكر</span>
+                </div>
 
-        <section class="panel map-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="section-label">الخريطة</p>
-              <h2>المحطات القريبة</h2>
-            </div>
-            <p class="panel-copy">النموذج الحالي للويب فقط لاختبار الفكرة على الموبايل.</p>
-          </div>
+                <div class="map-surface">
+                  <div id="station-map" class="station-map" aria-label="خريطة المحطات في طرابلس"></div>
+                  <div class="map-focus-pill" id="map-focus-pill">الخريطة على طرابلس</div>
+                  <div class="map-actions" aria-label="أدوات الخريطة">
+                    <button type="button" class="map-action-button" id="recenter-user-button">موقعي</button>
+                    <button type="button" class="map-action-button" id="recenter-tripoli-button">طرابلس</button>
+                  </div>
+                </div>
 
-          <div class="legend" aria-label="حالات المحطات">
-            <span><i class="dot green"></i>متوفر</span>
-            <span><i class="dot yellow"></i>متوفر لكن مزدحم</span>
-            <span><i class="dot red"></i>غير متوفر</span>
-            <span><i class="dot gray"></i>غير معروف</span>
-          </div>
+                <div class="location-banner" id="location-banner" role="status" aria-live="polite">
+                  يتم استخدام وسط طرابلس كموقع افتراضي.
+                </div>
+                </section>
 
-          <div class="map-surface">
-            <div id="station-map" class="station-map" aria-label="خريطة المحطات في طرابلس"></div>
-            <div class="map-focus-pill" id="map-focus-pill">الخريطة على طرابلس</div>
-            <div class="map-actions" aria-label="أدوات الخريطة">
-              <button type="button" class="map-action-button" id="recenter-user-button">موقعي</button>
-              <button type="button" class="map-action-button" id="recenter-tripoli-button">طرابلس</button>
-            </div>
-          </div>
+                <section class="panel list-panel">
+                <div class="panel-heading">
+                  <div>
+                    <h2 id="screen-title">أقرب المحطات</h2>
+                  </div>
+                  <p class="panel-copy" id="screen-subtitle">اختر المحطة المناسبة وافتحها في خرائط Google</p>
+                </div>
 
-          <div class="location-banner" id="location-banner" role="status" aria-live="polite">
-            يتم استخدام وسط طرابلس كموقع افتراضي.
-          </div>
-        </section>
+                <div class="discovery-toolbar hidden" id="search-toolbar">
+                  <label class="search-field" for="station-search-input">
+                    <input
+                      id="station-search-input"
+                      type="search"
+                      inputmode="search"
+                      autocomplete="off"
+                      placeholder="ابحث عن محطة أو منطقة"
+                    />
+                  </label>
+                  <div class="area-filter hidden" id="area-filter-container">
+                    <select id="area-filter-select" aria-label="اختر المنطقة">
+                      <option value="">كل المناطق</option>
+                    </select>
+                  </div>
+                </div>
 
-        <section class="panel list-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="section-label">قائمة المحطات</p>
-              <h2>محطات طرابلس</h2>
-            </div>
-            <p class="panel-copy" id="list-summary">جاري تحميل المحطات...</p>
-          </div>
+                <div id="search-prompt" class="empty-state hidden">ابحث باسم المحطة أو المنطقة</div>
+                <div id="station-list" class="station-list" aria-live="polite"></div>
+                <div id="list-empty" class="empty-state hidden">لا توجد محطات متاحة حالياً.</div>
+                <button type="button" class="secondary-button hidden" id="show-more-button">عرض المزيد</button>
+                </section>
 
-          <div class="list-filters" id="list-filters" aria-label="تصفية المحطات">
-            <button type="button" class="filter-chip filter-chip-active" data-filter-status="all">الكل</button>
-            <button type="button" class="filter-chip" data-filter-status="available">متوفر</button>
-            <button type="button" class="filter-chip" data-filter-status="crowded">مزدحم</button>
-            <button type="button" class="filter-chip" data-filter-status="no_fuel">غير متوفر</button>
-            <button type="button" class="filter-chip" data-filter-status="unknown">غير معروف</button>
-          </div>
+                <section class="panel details-panel home-screen-hidden" hidden aria-hidden="true">
+                <div class="panel-heading">
+                  <div>
+                    <p class="section-label">تفاصيل المحطة</p>
+                    <h2 id="station-title">اختر محطة</h2>
+                  </div>
+                  <span class="status-badge status-unknown" id="station-status-badge">مسكر</span>
+                </div>
 
-          <div id="station-list" class="station-list" aria-live="polite"></div>
-          <div id="list-empty" class="empty-state hidden">لا توجد محطات متاحة حالياً.</div>
-        </section>
+                <div id="station-empty" class="empty-state">
+                  اختر محطة لعرض الحالة الحالية ومستوى الزحمة ونموذج البلاغ.
+                </div>
 
-        <section class="panel details-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="section-label">تفاصيل المحطة</p>
-              <h2 id="station-title">اختر محطة</h2>
-            </div>
-            <span class="status-badge status-unknown" id="station-status-badge">غير معروف</span>
-          </div>
+                <div id="station-details" class="station-details hidden">
+                  <dl class="stats-grid">
+                    <div class="stat-card">
+                      <dt>المسافة</dt>
+                      <dd id="station-distance">-</dd>
+                    </div>
+                    <div class="stat-card">
+                      <dt>الزحمة</dt>
+                      <dd id="station-queue">-</dd>
+                    </div>
+                    <div class="stat-card">
+                      <dt>آخر تحديث</dt>
+                      <dd id="station-updated">-</dd>
+                    </div>
+                    <div class="stat-card">
+                      <dt>البلاغات الأخيرة</dt>
+                      <dd id="station-reports">-</dd>
+                    </div>
+                    <div class="stat-card">
+                      <dt>النشاط الحالي</dt>
+                      <dd id="station-activity-label">-</dd>
+                    </div>
+                    <div class="stat-card">
+                      <dt>الأجهزة النشطة</dt>
+                      <dd id="station-activity-count">-</dd>
+                    </div>
+                  </dl>
 
-          <div id="station-empty" class="empty-state">
-            اختر محطة لعرض الحالة الحالية ومستوى الزحمة ونموذج البلاغ.
-          </div>
-
-          <div id="station-details" class="station-details hidden">
-            <dl class="stats-grid">
-              <div class="stat-card">
-                <dt>المسافة</dt>
-                <dd id="station-distance">-</dd>
+                  <div class="report-card">
+                    <div>
+                      <p class="section-label">بلاغ سريع</p>
+                      <h3>بلّغ عن المحطة</h3>
+                      <p class="report-copy">يتم احتساب البلاغ ضمن حالة المحطة خلال آخر 60 دقيقة.</p>
+                      <p class="report-hint">اللون الأصفر يعني طابور خفيف أو زحمة.</p>
+                      <p class="report-passive-note">وجودك يساعد تحسين دقة البيانات</p>
+                      <p class="report-access-message" id="report-access-message" role="status" aria-live="polite"></p>
+                    </div>
+                    <button type="button" class="primary-button" id="open-report-modal-button">
+                      بلّغ عن المحطة
+                    </button>
+                  </div>
+                </div>
+                </section>
               </div>
-              <div class="stat-card">
-                <dt>الزحمة</dt>
-                <dd id="station-queue">-</dd>
-              </div>
-              <div class="stat-card">
-                <dt>آخر تحديث</dt>
-                <dd id="station-updated">-</dd>
-              </div>
-              <div class="stat-card">
-                <dt>البلاغات الأخيرة</dt>
-                <dd id="station-reports">-</dd>
-              </div>
-            </dl>
+            </main>
 
-            <div class="report-card">
-              <div>
-                <p class="section-label">بلاغ سريع</p>
-                <h3>بلّغ عن المحطة</h3>
-                <p class="report-copy">يتم احتساب البلاغ ضمن حالة المحطة خلال آخر 60 دقيقة.</p>
-                <p class="report-hint">الحالة الصفراء تعني أن الوقود متوفر لكن الزحمة متوسطة أو طويلة.</p>
-                <p class="report-access-message" id="report-access-message" role="status" aria-live="polite"></p>
-              </div>
-              <button type="button" class="primary-button" id="open-report-modal-button">
-                بلّغ عن المحطة
+            <nav class="bottom-nav" aria-label="التنقل السفلي">
+              <div class="nav-indicator" aria-hidden="true"></div>
+              <button type="button" class="nav-item active" data-tab="home" aria-current="page" aria-label="الرئيسية">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 10.5 12 3l9 7.5"></path>
+                  <path d="M6.75 9.75V20h10.5V9.75"></path>
+                </svg>
               </button>
-            </div>
+              <button type="button" class="nav-item" data-tab="search" aria-label="البحث">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5"></circle>
+                  <path d="m16 16 4.5 4.5"></path>
+                </svg>
+              </button>
+            </nav>
           </div>
-        </section>
-      </main>
+        </div>
+      </div>
     </div>
 
     <template id="station-card-template">
-      <button class="station-card" type="button">
+      <article class="station-card" tabindex="0" role="button">
         <div class="station-card-top">
           <div class="station-card-main">
             <h3 class="station-card-title"></h3>
+            <p class="station-card-status"></p>
             <p class="station-card-distance"></p>
           </div>
-          <span class="status-badge"></span>
         </div>
         <div class="station-card-bottom">
           <span class="queue-pill"></span>
           <span class="station-card-updated"></span>
         </div>
-        <div class="station-card-action">عرض التفاصيل</div>
-      </button>
+        <div class="station-card-meta">
+          <span class="station-card-reports"></span>
+          <span class="station-card-activity"></span>
+        </div>
+        <div class="station-card-actions">
+          <button type="button" class="station-card-action station-card-action-map" data-station-action="maps">افتح في خرائط Google</button>
+        </div>
+      </article>
     </template>
 
     <div class="modal-backdrop hidden" id="report-modal-backdrop" aria-hidden="true">
@@ -196,7 +225,7 @@
             <div class="report-options two-up">
               <label class="choice-chip choice-chip-positive">
                 <input type="radio" name="status" value="available" checked />
-                <span>الوقود متوفر</span>
+                <span>فيه بنزين</span>
               </label>
               <label class="choice-chip choice-chip-danger">
                 <input type="radio" name="status" value="no_fuel" />
@@ -235,6 +264,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
+    <script src="./config.js"></script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>
