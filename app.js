@@ -4,6 +4,7 @@ import {
   DEFAULT_DISCOVERY_RADIUS_KM,
   findNearestStationWithinDistance,
   formatDistanceLabel,
+  formatNumber,
   getAreaOptions,
   getDemoReportPreset,
   getDemoUpdateDelayMs,
@@ -14,6 +15,7 @@ import {
   getStationAreaLabel,
   getStationUrgencyMessage,
   matchesStationSearch,
+  minutesSince,
   PRESENCE_HEARTBEAT_MS,
   STATUS_META,
   formatRelativeTime,
@@ -25,6 +27,11 @@ import { getLocationModeConfig, getProtocolWarning } from "./environment-utils.m
 import { buildDecisionFirstLayout } from "./home-layout-utils.mjs";
 import { getGoogleMapsUrl, getLeafletMarkerClass } from "./map-utils.mjs";
 import {
+  isFavoriteStation,
+  readFavoriteStations,
+  toggleFavoriteStation,
+} from "./favorite-stations-storage.mjs";
+import {
   canNotifyStation,
   getStationAvailabilityNotificationMessage,
   markStationNotified,
@@ -32,6 +39,7 @@ import {
   shouldNotifyAvailabilityChange,
 } from "./notification-utils.mjs";
 import { getAnonymousDeviceId } from "./presence-storage.mjs";
+import { readRecentStations, saveRecentStation } from "./recent-stations-storage.mjs";
 import { createRepository } from "./repository.mjs";
 import { resolveSelectedStationId } from "./selection-utils.mjs";
 
@@ -181,6 +189,18 @@ safeSubscribeToRealtime();
 
 stationList.addEventListener("click", (event) => {
   const target = event.target;
+  const favoriteAction = target.closest("[data-station-action='favorite']");
+  if (favoriteAction) {
+    const stationCard = favoriteAction.closest("[data-station-id]");
+    if (!stationCard) {
+      return;
+    }
+
+    event.stopPropagation();
+    toggleStationFavorite(stationCard.dataset.stationId);
+    return;
+  }
+
   const stationMapAction = target.closest("[data-station-action='maps']");
 
   if (!stationMapAction) {
@@ -198,6 +218,18 @@ stationList.addEventListener("click", (event) => {
 
 stationList.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  const favoriteButton = event.target.closest("[data-station-action='favorite']");
+  if (favoriteButton) {
+    const stationCard = favoriteButton.closest("[data-station-id]");
+    if (!stationCard) {
+      return;
+    }
+
+    event.preventDefault();
+    toggleStationFavorite(stationCard.dataset.stationId);
     return;
   }
 
@@ -572,28 +604,119 @@ function renderAccountScreen() {
 function createAccountScreen() {
   const screen = document.createElement("section");
   screen.className = "account-screen";
-  screen.innerHTML = `
-    ${createAccountCardMarkup(
+  screen.append(
+    createAccountCardElement(
       "موقعي",
       getLocationStatusText(),
       "نستخدم موقعك لعرض أقرب المحطات فقط",
-    )}
-    ${createAccountCardMarkup("المفضلة", "المحطات المحفوظة ستظهر هنا")}
-    ${createAccountCardMarkup("آخر استخدام", "المحطات التي فتحتها مؤخراً ستظهر هنا")}
-    ${createAccountCardMarkup("عن التطبيق", "شيل يساعدك تعرف أقرب محطة مناسبة قبل ما تمشي")}
-    ${createAccountCardMarkup("الخصوصية", "لا نعرض موقعك لأي مستخدم آخر")}
-  `;
+    ),
+    createFavoriteStationsCard(),
+    createRecentStationsCard(),
+    createAccountCardElement("عن التطبيق", "شيل يساعدك تعرف أقرب محطة مناسبة قبل ما تمشي"),
+    createAccountCardElement("الخصوصية", "لا نعرض موقعك لأي مستخدم آخر"),
+  );
   return screen;
 }
 
-function createAccountCardMarkup(title, text, note = "") {
-  return `
-    <article class="account-card">
-      <h3>${title}</h3>
-      <p>${text}</p>
-      ${note ? `<p class="account-card-note">${note}</p>` : ""}
-    </article>
-  `;
+function createAccountCardElement(title, text, note = "") {
+  const card = document.createElement("article");
+  card.className = "account-card";
+
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  card.append(heading);
+
+  const body = document.createElement("p");
+  body.textContent = text;
+  card.append(body);
+
+  if (note) {
+    const noteElement = document.createElement("p");
+    noteElement.className = "account-card-note";
+    noteElement.textContent = note;
+    card.append(noteElement);
+  }
+
+  return card;
+}
+
+function createFavoriteStationsCard() {
+  const card = document.createElement("article");
+  card.className = "account-card";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "المفضلة";
+  card.append(heading);
+
+  const favoriteStations = readFavoriteStations();
+  if (!favoriteStations.length) {
+    const emptyState = document.createElement("p");
+    emptyState.textContent = "لا توجد محطات محفوظة";
+    card.append(emptyState);
+    return card;
+  }
+
+  const list = document.createElement("ul");
+  list.className = "account-stations-list";
+  favoriteStations.forEach((station) => {
+    list.append(createAccountStationListItem(station, {
+      timeText: getFavoriteStationDistanceText(station),
+    }));
+  });
+
+  card.append(list);
+  return card;
+}
+
+function createRecentStationsCard() {
+  const card = document.createElement("article");
+  card.className = "account-card";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "آخر استخدام";
+  card.append(heading);
+
+  const recentStations = readRecentStations();
+  if (!recentStations.length) {
+    const emptyState = document.createElement("p");
+    emptyState.textContent = "لم يتم فتح أي محطة بعد";
+    card.append(emptyState);
+    return card;
+  }
+
+  const list = document.createElement("ul");
+  list.className = "account-stations-list recent-stations-list";
+  recentStations.forEach((station) => {
+    list.append(createAccountStationListItem(station, {
+      timeText: getRecentStationOpenedText(station.timestamp),
+    }));
+  });
+
+  card.append(list);
+  return card;
+}
+
+function createAccountStationListItem(station, { timeText }) {
+  const item = document.createElement("li");
+  item.dataset.stationId = station.id;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "account-station-button";
+  button.dataset.stationAction = "maps";
+  button.setAttribute("aria-label", `افتح ${station.name} في خرائط Google`);
+
+  const name = document.createElement("span");
+  name.className = "account-station-name";
+  name.textContent = station.name;
+
+  const meta = document.createElement("span");
+  meta.className = "account-station-meta";
+  meta.textContent = timeText;
+
+  button.append(name, meta);
+  item.append(button);
+  return item;
 }
 
 function getLocationStatusText() {
@@ -602,6 +725,37 @@ function getLocationStatusText() {
   }
 
   return "الموقع غير مفعّل";
+}
+
+function getRecentStationOpenedText(timestamp, now = new Date()) {
+  const diffMinutes = Math.max(0, Math.round(minutesSince(timestamp, now)));
+
+  if (!Number.isFinite(diffMinutes)) {
+    return "منذ وقت سابق";
+  }
+
+  if (diffMinutes < 1) {
+    return "منذ أقل من دقيقة";
+  }
+
+  if (diffMinutes === 1) {
+    return "منذ دقيقة";
+  }
+
+  if (diffMinutes < 60) {
+    return `منذ ${formatNumber(diffMinutes)} دقائق`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours === 1) {
+    return "منذ ساعة";
+  }
+
+  return `منذ ${formatNumber(diffHours)} ساعات`;
+}
+
+function getFavoriteStationDistanceText(station) {
+  return Number.isFinite(station.distance) ? formatDistanceLabel(station.distance) : "افتح في خرائط Google";
 }
 
 function createHeroSection(station, template) {
@@ -813,6 +967,7 @@ function createReferenceHeroCard(station) {
       <span>افتح في خرائط Google</span>
       <span class="station-card-action-icon" aria-hidden="true">⌖</span>
     </button>
+    ${createFavoriteActionMarkup(station)}
   `;
 
   card.querySelector(".best-station-title").textContent = station.name;
@@ -838,6 +993,7 @@ function createReferenceBackupCard(station) {
     <button type="button" class="station-card-row-action station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
       ${createChevronIconMarkup()}
     </button>
+    ${createFavoriteActionMarkup(station)}
   `;
 
   card.querySelector(".backup-station-title").textContent = station.name;
@@ -862,6 +1018,7 @@ function createReferenceListCard(station, tone) {
     <button type="button" class="station-card-row-action station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
       ${createChevronIconMarkup()}
     </button>
+    ${createFavoriteActionMarkup(station)}
   `;
 
   card.querySelector(".nearby-station-title").textContent = station.name;
@@ -906,6 +1063,16 @@ function createMetaRowMarkup(className) {
 
 function createFuelIconMarkup() {
   return `<img src="/assets/gas-station.png" class="station-icon-img" alt="" aria-hidden="true" />`;
+}
+
+function createFavoriteActionMarkup(station) {
+  const isSaved = isFavoriteStation(station.id);
+  return `
+    <button type="button" class="station-favorite-action${isSaved ? " is-saved" : ""}" data-station-action="favorite" aria-pressed="${isSaved ? "true" : "false"}">
+      <span aria-hidden="true">${isSaved ? "★" : "☆"}</span>
+      <span>${isSaved ? "محفوظ" : "حفظ"}</span>
+    </button>
+  `;
 }
 
 function createChevronIconMarkup() {
@@ -1035,6 +1202,18 @@ function syncActiveTabUi() {
   }
 }
 
+function toggleStationFavorite(stationId) {
+  const station = latestProjectedStations.find((item) => item.id === stationId)
+    ?? stations.find((item) => item.id === stationId);
+  if (!station) {
+    return;
+  }
+
+  const { isFavorite } = toggleFavoriteStation(station);
+  showSuccessToast(isFavorite ? "تم حفظ المحطة" : "تم إزالة المحطة من المفضلة");
+  render();
+}
+
 function openStationInGoogleMaps(stationId) {
   const station = latestProjectedStations.find((item) => item.id === stationId)
     ?? stations.find((item) => item.id === stationId);
@@ -1042,6 +1221,7 @@ function openStationInGoogleMaps(stationId) {
     return;
   }
 
+  saveRecentStation(station);
   window.open(getGoogleMapsUrl(station), "_blank", "noopener");
   showSuccessToast("تم فتح الخريطة. رحلة موفقة");
 }

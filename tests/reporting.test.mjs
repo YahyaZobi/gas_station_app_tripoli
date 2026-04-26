@@ -42,6 +42,13 @@ import {
   summarizeStationPresence,
 } from "../logic.mjs";
 import { getLocationModeConfig, getProtocolWarning } from "../environment-utils.mjs";
+import {
+  FAVORITE_STATIONS_STORAGE_KEY,
+  isFavoriteStation,
+  MAX_FAVORITE_STATIONS,
+  readFavoriteStations,
+  toggleFavoriteStation,
+} from "../favorite-stations-storage.mjs";
 import { buildDecisionFirstLayout } from "../home-layout-utils.mjs";
 import { filterStationsForList } from "../list-utils.mjs";
 import { getGoogleMapsUrl, getLeafletMarkerClass } from "../map-utils.mjs";
@@ -54,6 +61,12 @@ import {
   STATION_NOTIFICATION_STORAGE_KEY,
 } from "../notification-utils.mjs";
 import { DEVICE_ID_STORAGE_KEY, getAnonymousDeviceId } from "../presence-storage.mjs";
+import {
+  MAX_RECENT_STATIONS,
+  readRecentStations,
+  RECENT_STATIONS_STORAGE_KEY,
+  saveRecentStation,
+} from "../recent-stations-storage.mjs";
 import { readStoredReports } from "../report-storage.mjs";
 import { createRepository } from "../repository.mjs";
 import { resolveSelectedStationId } from "../selection-utils.mjs";
@@ -410,6 +423,59 @@ test("station notifications are throttled to one per 30 minutes", () => {
   assert.equal(canNotifyStation("station-1", new Date("2026-04-24T12:20:00.000Z"), storage), false);
   assert.equal(canNotifyStation("station-1", new Date("2026-04-24T12:31:00.000Z"), storage), true);
   assert.match(storage.getItem(STATION_NOTIFICATION_STORAGE_KEY), /station-1/);
+});
+
+test("recent stations are saved most-recent first with duplicates removed and max five kept", () => {
+  const storage = createMemoryStorage();
+
+  for (let index = 1; index <= 6; index += 1) {
+    saveRecentStation(
+      { id: `station-${index}`, name: `محطة ${index}`, distanceKm: index },
+      { now: new Date(`2026-04-24T12:0${index}:00.000Z`), storage },
+    );
+  }
+  saveRecentStation(
+    { id: "station-3", name: "محطة 3", distanceKm: 0.7 },
+    { now: new Date("2026-04-24T12:10:00.000Z"), storage },
+  );
+
+  const recentStations = readRecentStations(storage);
+
+  assert.equal(recentStations.length, MAX_RECENT_STATIONS);
+  assert.deepEqual(recentStations.map((item) => item.id), [
+    "station-3",
+    "station-6",
+    "station-5",
+    "station-4",
+    "station-2",
+  ]);
+  assert.equal(recentStations[0].distance, 0.7);
+  assert.match(storage.getItem(RECENT_STATIONS_STORAGE_KEY), /station-3/);
+});
+
+test("favorite stations toggle locally with max ten saved", () => {
+  const storage = createMemoryStorage();
+
+  for (let index = 1; index <= 11; index += 1) {
+    toggleFavoriteStation(
+      { id: `station-${index}`, name: `محطة ${index}`, distanceKm: index / 10 },
+      storage,
+    );
+  }
+
+  let favoriteStations = readFavoriteStations(storage);
+  assert.equal(favoriteStations.length, MAX_FAVORITE_STATIONS);
+  assert.equal(isFavoriteStation("station-11", storage), true);
+  assert.equal(isFavoriteStation("station-1", storage), false);
+  assert.equal(favoriteStations[0].distance, 1.1);
+
+  const result = toggleFavoriteStation({ id: "station-11", name: "محطة 11" }, storage);
+  favoriteStations = readFavoriteStations(storage);
+
+  assert.equal(result.isFavorite, false);
+  assert.equal(isFavoriteStation("station-11", storage), false);
+  assert.equal(favoriteStations.length, MAX_FAVORITE_STATIONS - 1);
+  assert.match(storage.getItem(FAVORITE_STATIONS_STORAGE_KEY), /station-10/);
 });
 
 test("notifyUser falls back to toast when browser notifications are unavailable", () => {
@@ -1416,7 +1482,8 @@ test("home screen and search tab keep clear separated copy", () => {
   assert.match(source, /bottomNav\.dataset\.activeTab = state\.activeTab/);
   assert.match(source, /موقعي/);
   assert.match(source, /نستخدم موقعك لعرض أقرب المحطات فقط/);
-  assert.match(source, /المحطات المحفوظة ستظهر هنا/);
+  assert.match(source, /لا توجد محطات محفوظة/);
+  assert.match(source, /createFavoriteStationsCard/);
   assert.match(source, /شيل يساعدك تعرف أقرب محطة مناسبة قبل ما تمشي/);
   assert.match(source, /لا نعرض موقعك لأي مستخدم آخر/);
   assert.match(source, /state\.discoveryRadiusKm = EXPANDED_DISCOVERY_RADIUS_KM/);

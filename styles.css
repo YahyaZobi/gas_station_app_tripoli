@@ -1957,6 +1957,110 @@ legend {
   color: var(--green-strong);
 }
 
+.account-stations-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-stations-list li {
+  margin: 0;
+}
+
+.account-station-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: transparent;
+  cursor: pointer;
+  text-align: right;
+}
+
+.account-stations-list li:last-child .account-station-button {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.account-station-name,
+.recent-station-name {
+  color: var(--navy);
+  font-size: 0.96rem;
+  line-height: 1.4;
+  font-weight: 800;
+}
+
+.account-station-meta,
+.recent-station-time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.account-station-button:hover .account-station-name,
+.account-station-button:focus-visible .account-station-name {
+  color: var(--green-strong);
+}
+
+.station-favorite-action {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(47, 168, 79, 0.18);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--green-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.station-favorite-action:hover,
+.station-favorite-action:focus-visible {
+  transform: translateY(-1px);
+  background: #e8f5ec;
+}
+
+.station-favorite-action.is-saved {
+  border-color: rgba(47, 168, 79, 0.34);
+  background: #e8f5ec;
+  color: var(--green-strong);
+}
+
+.best-station-card .station-favorite-action {
+  position: relative;
+  z-index: 2;
+  margin-top: 10px;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(15, 61, 46, 0.42);
+  box-shadow: none;
+}
+
+.best-station-card .station-favorite-action:hover,
+.best-station-card .station-favorite-action:focus-visible,
+.best-station-card .station-favorite-action.is-saved {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
