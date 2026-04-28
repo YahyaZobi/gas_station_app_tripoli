@@ -60,26 +60,29 @@ export function createRepository({
 
       try {
         const rows = await supabaseClient.select(
-          "stations",
-          "select=id,name,latitude,longitude,is_active&is_active=eq.true&order=name.asc",
+          "station_predictions",
+          "select=station_id,name,latitude,longitude,fuel_status,crowd_level,confidence_score&order=confidence_score.desc",
         );
 
         if (!Array.isArray(rows) || rows.length === 0) {
-          log.warn("[Repository] Using local station data. Reason: Supabase returned no stations.");
+          log.warn("[Repository] Using fallback stations. Reason: No predictions returned.");
           return fallbackStations;
         }
 
         const stations = rows.map((row) => ({
-          id: row.id,
+          id: row.station_id,
           name: row.name,
           latitude: Number(row.latitude),
           longitude: Number(row.longitude),
+          fuelStatus: row.fuel_status,
+          crowdLevel: row.crowd_level,
+          confidenceScore: Number(row.confidence_score),
         }));
 
-        log.info(`[Repository] Stations fetch succeeded. Count: ${stations.length}.`);
+        log.info(`[Repository] Prediction fetch succeeded. Count: ${stations.length}.`);
         return stations;
       } catch {
-        log.warn("[Repository] Using local station data. Reason: Supabase stations fetch failed.");
+        log.warn("[Repository] Using fallback stations. Reason: Predictions fetch failed.");
         return fallbackStations;
       }
     },
@@ -151,6 +154,7 @@ export function createRepository({
         return report;
       }
     },
+
     subscribeToReportInserts(onInsert) {
       if (typeof supabaseClient.subscribeToReportInserts !== "function") {
         log.warn("[Repository] Realtime disabled. Reason: Supabase client has no realtime support.");
@@ -162,6 +166,7 @@ export function createRepository({
         onInsert(insertedReport);
       });
     },
+
     async getRecentPresence() {
       if (!supabaseClient.isConfigured) {
         log.warn("[Repository] Presence disabled. Reason: Supabase config missing.");
@@ -191,30 +196,61 @@ export function createRepository({
         return [];
       }
     },
-    async submitPresenceHeartbeat({ stationId, deviceId, latitude, longitude, distanceToStationMeters, lastSeenAt }) {
+
+    async submitPresenceHeartbeat(
+      { stationId, deviceId, latitude, longitude, distanceToStationMeters, lastSeenAt },
+      { detailedResult = false } = {},
+    ) {
       if (!supabaseClient.isConfigured) {
         log.warn("[Repository] Presence heartbeat skipped. Reason: Supabase config missing.");
+        if (detailedResult) {
+          return {
+            ok: false,
+            error: "Supabase config missing.",
+            payload: null,
+          };
+        }
+
         return null;
       }
+
+      const payload = {
+        station_id: stationId,
+        device_id: deviceId,
+        latitude,
+        longitude,
+        distance_to_station_meters: distanceToStationMeters,
+        last_seen_at: lastSeenAt,
+      };
 
       try {
         const [row] = await supabaseClient.upsert(
           "station_presence",
-          {
-            station_id: stationId,
-            device_id: deviceId,
-            latitude,
-            longitude,
-            distance_to_station_meters: distanceToStationMeters,
-            last_seen_at: lastSeenAt,
-          },
+          payload,
           ["station_id", "device_id"],
         );
 
         log.info("[Repository] Presence heartbeat saved.");
+        if (detailedResult) {
+          return {
+            ok: true,
+            row: row ?? null,
+            payload,
+          };
+        }
+
         return row ?? null;
-      } catch {
-        log.warn("[Repository] Presence heartbeat skipped. Reason: Supabase presence submit failed.");
+      } catch (error) {
+        const errorMessage = error?.message ?? "Supabase presence submit failed.";
+        log.warn(`[Repository] Presence heartbeat skipped. Reason: ${errorMessage}`);
+        if (detailedResult) {
+          return {
+            ok: false,
+            error: errorMessage,
+            payload,
+          };
+        }
+
         return null;
       }
     },
