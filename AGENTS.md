@@ -1,48 +1,80 @@
-# AGENTS.md
+# Project: Shale (Tripoli Gas Station Availability App)
 
-## Project Overview
-- **Project:** [Name] — [one sentence describing what it does]
-- **Target user:** [e.g. developers, small businesses, lawyers]
-- **My skill level:** [beginner / intermediate / expert]
-- **Stack:** [e.g. Next.js, Supabase, Tailwind — or "see package files"]
+## Core Objective
+Deliver the most reliable real-time estimation of gas station availability.
+Trust > features.
 
-## Commands
-- **Install:** [e.g. `npm install`, `pip install -r requirements.txt`]
-- **Dev:** [e.g. `npm run dev`, `python manage.py runserver`]
-- **Build:** [e.g. `npm run build`]
-- **Test:** [e.g. `npm test`, `pytest`]
-- **Lint:** [e.g. `npm run lint`, `ruff check .`]
+## System Model
+This is NOT a reporting app.
+This is a prediction system.
 
-## Do
-- Read existing code before modifying anything
-- Match existing patterns, naming, and style
-- Handle errors gracefully — no silent failures
-- Keep changes small and scoped to what was asked
-- Run dev/build after changes to verify nothing broke
-- Ask clarifying questions before guessing
+Inputs:
+- Station base data
+- User reports
+- Time patterns
+- Location density
+- Historical behavior
 
-## Don't
-- Install new dependencies without asking
-- Delete or overwrite files without confirming
-- Hardcode secrets, API keys, or credentials
-- Rewrite working code unless explicitly asked
-- Push, deploy, or force-push without permission
-- Make changes outside the scope of the request
+Output:
+- Fuel status
+- Crowd level
+- Confidence score
 
-## When Stuck
-- If a task is large, break it into steps and confirm the plan first
-- If you can't fix an error in 2 attempts, stop and explain the issue
+## Tech Stack
+- Frontend: Vanilla JS modular .mjs
+- Backend: Supabase PostgreSQL + PostGIS
+- DB Tables: stations, reports
 
-## Testing
-- Run existing tests after any change
-- Add at least one test for new features
-- Never skip or delete tests to make things pass
+## Data & Logic Rules
+- Never trust raw reports blindly.
+- Weight reports by recency, distance, frequency, and user reliability.
+- Always aggregate reports before showing station status.
+- Use confidence_score for every station.
+- Low confidence means status should be unknown.
 
-## Git
-- Small, focused commits with descriptive messages
-- Never force push
+## Tripoli Pattern Rules
+- Early morning is usually low crowd.
+- Sunday is usually peak demand.
+- Thursday is usually high demand.
+- Friday morning is usually the best window.
+- Emergency shortages override normal patterns.
 
-## Response Style
-- always respond with clear & concise messages
-- use plain English when explaining to the User
-- avoid long sentences, complex words, or long paragraphs
+## Performance Rules
+- Heavy logic must run in Postgres.
+- Avoid large client-side loops.
+- Use SQL aggregation and indexes.
+- Optimize for mobile networks.
+
+## UI/UX Rules
+- Mobile-first only.
+- Arabic RTL required.
+- Clean minimal UI.
+
+Status labels:
+- available = متوفر
+- crowded = مزدحم
+- no fuel = غير متوفر
+- unknown = غير معروف
+
+Sorting priority:
+1. available
+2. short queue
+3. high confidence
+4. proximity
+
+## Engineering Rules
+- Do not rewrite full files unless necessary.
+- Preserve structure and naming.
+- Make minimal safe changes.
+- Explain why the change is needed.
+- Highlight risks.
+
+## Feature Rule
+Only add features that improve accuracy, trust, or speed.
+
+## Avoid
+- Over-engineering
+- Unnecessary libraries
+- Trusting user input blindly
+- Heavy frontend computation
+- Ignoring confidence scoring
