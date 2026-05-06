@@ -2414,3 +2414,2808 @@ legend {
     text-align: right;
   }
 }
+
+/* App header — persistent top bar with logo, title, and live pill */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  padding-top: 12px;
+}
+
+.app-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 12px;
+  background: var(--header-bg, #f8fafc);
+  transition: background 0.3s var(--ease-out);
+}
+
+.app-header-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #16a34a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.28);
+  transition: background 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+}
+
+.app-header-logo svg {
+  width: 20px;
+  height: 20px;
+  color: #fff;
+}
+
+.app-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-header-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--ink, #0f172a);
+  letter-spacing: -0.01em;
+}
+
+.app-header-subtitle {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--muted, #64748b);
+}
+
+.app-header-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line, #e2e8f0);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink, #0f172a);
+}
+
+.app-header-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #16a34a;
+}
+
+/* ─── Hero card — figma-hero-* layout ─────────────────────────────────────── */
+
+/* "أفضل محطة" section label above the card */
+.station-group-hero::before {
+  content: "أفضل محطة";
+  display: block;
+  padding: 0 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted, #64748b);
+  text-transform: uppercase;
+  direction: rtl;
+  text-align: right;
+}
+
+/* Remove default top-margin — the ::before label provides the gap */
+.station-group-hero {
+  margin-top: 8px;
+}
+
+/* Card outer: padding already set by .best-station-card; just ensure it's a
+   block so the inner flex children lay out correctly */
+.figma-hero-card {
+  display: block;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* Minimum touch target height */
+  min-height: 130px;
+}
+
+/* Head row: copy text on the right, icon on the left (RTL) */
+.figma-hero-head {
+  display: flex;
+  direction: rtl;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+/* Text column */
+.figma-hero-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  direction: rtl;
+  text-align: right;
+}
+
+/* Status badge inside the hero card */
+.figma-hero-card .best-station-label {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  box-shadow: none;
+  margin-bottom: 0;
+}
+
+/* Station name — large, heavy, readable at arm's length */
+.figma-hero-card .best-station-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #fff;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+/* Gold icon container */
+.figma-hero-icon-wrap {
+  flex-shrink: 0;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.figma-hero-icon-wrap svg,
+.figma-hero-icon-wrap img {
+  width: 30px;
+  height: 30px;
+}
+
+/* Distance / ETA pills row */
+.figma-hero-pills {
+  display: flex;
+  direction: rtl;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.figma-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.figma-hero-pill strong {
+  font-weight: 700;
+}
+
+/* ─── Bottom nav — active-tab pill refinements ─────────────────────────────── */
+
+/* Prevent the indicator from eating taps meant for the buttons */
+.nav-indicator {
+  pointer-events: none;
+  will-change: left;
+}
+
+/* Fix search-tab indicator to sit flush at the right edge */
+.bottom-nav[data-active-tab="search"] .nav-indicator {
+  left: calc(66.666% + 0px);
+}
+
+/* Inactive labels — slightly brighter so they read on dark bg */
+.nav-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #94a3b8;
+  transition: color 180ms ease;
+}
+
+/* Active button — only scale the icon, not the whole cell */
+.nav-item.active {
+  color: #ffffff;
+  transform: none;
+}
+
+.nav-item.active svg {
+  transform: scale(1.12);
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter 200ms ease;
+}
+
+.nav-item svg {
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter 200ms ease;
+}
+
+/* Active label — bright white */
+.nav-item.active .nav-label {
+  color: #ffffff;
+}
+
+/* Press feedback — whole button compresses slightly */
+.nav-item:active {
+  transform: scale(0.95);
+}
+
+.nav-item.active:active {
+  transform: scale(0.97);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DESIGN MATCH — Shale app.jsx reference
+   All overrides live here; touch nothing above.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── App background ─────────────────────────────────────────── */
+body {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(14, 122, 50, 0.08), transparent 40%),
+    radial-gradient(circle at 80% 90%, rgba(245, 201, 58, 0.08), transparent 40%),
+    #eef2f0;
+}
+
+.phone-screen,
+.app-shell {
+  background: #f8fafc;
+}
+
+/* ── Bottom nav — white pill, active tab expands ────────────── */
+.bottom-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 6px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  /* override grid */
+  grid-template-columns: unset;
+  overflow: visible;
+}
+
+/* Hide the sliding pill — design doesn't use it */
+.nav-indicator {
+  display: none !important;
+}
+
+/* All tabs: narrow, transparent, dark text */
+.nav-item {
+  flex: 0 0 auto;
+  background: transparent;
+  color: #334155;
+  border-radius: 16px;
+  min-height: 44px;
+  padding: 10px 14px;
+  transform: none;
+}
+
+.nav-item:hover,
+.nav-item:focus-visible {
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+/* Active tab: grows to fill, dark bg, white text, shows label */
+.nav-item.active {
+  flex: 1 1 auto;
+  background: #0f172a;
+  color: #fff;
+  transform: none;
+  gap: 8px;
+}
+
+.nav-item.active svg {
+  transform: none;
+  filter: none;
+}
+
+/* Labels: hide on inactive, show on active */
+.nav-label {
+  display: none;
+  font-size: 13px;
+  font-weight: 800;
+  color: inherit;
+  letter-spacing: 0;
+}
+
+.nav-item.active .nav-label {
+  display: inline;
+  color: #fff;
+}
+
+.nav-item svg {
+  transition: none;
+}
+
+.nav-item:active { transform: scale(0.96); }
+.nav-item.active:active { transform: scale(0.97); }
+
+/* ── Hero card — dark navy, not green gradient ──────────────── */
+.best-station-card {
+  background: #0f172a;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  color: #fff;
+}
+
+/* Remove the conic burst pattern */
+.hero-card::before {
+  display: none;
+}
+
+/* "الأفضل الآن" badge — green accent on dark bg */
+.best-station-card .station-card-crown,
+.best-station-card .station-card-badge {
+  background: #22c55e;
+  color: #0a3a1c;
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Status badge inside hero */
+.best-station-card .station-card-status,
+.best-station-card .queue-pill {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Station name on hero */
+.best-station-card .station-card-title,
+.best-station-card .best-station-title {
+  color: #fff;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+/* Distance / updated on hero */
+.best-station-card .station-card-distance,
+.best-station-card .station-card-updated {
+  color: #94a3b8;
+}
+
+/* Google maps CTA on hero — full width green button */
+.best-station-card .station-card-action-map {
+  width: 100%;
+  background: #22c55e;
+  color: #0a3a1c;
+  border: none;
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: inherit;
+  margin-top: 6px;
+}
+
+.best-station-card .station-card-action-map:hover,
+.best-station-card .station-card-action-map:focus-visible {
+  background: #16a34a;
+  color: #fff;
+}
+
+/* ── Nearby station rows — white card, border, FuelBadge ────── */
+.figma-nearby-card,
+.nearby-station-row {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  direction: rtl;
+  cursor: pointer;
+  transition: box-shadow 180ms ease;
+}
+
+.figma-nearby-card:hover,
+.nearby-station-row:hover {
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.nearby-station-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #dcfce7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nearby-station-icon svg,
+.nearby-station-icon img {
+  width: 22px;
+  height: 22px;
+  color: #16a34a;
+}
+
+.nearby-station-copy {
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+}
+
+.nearby-station-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px;
+}
+
+.nearby-station-meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 0;
+}
+
+/* Chevron action button */
+.station-card-side-actions .station-card-row-action {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+/* ── Section block wrapper — white card with green bar header ── */
+.station-group {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  margin-top: 0;
+}
+
+/* Don't wrap the hero section in a white card */
+.station-group-hero {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+/* Section title row */
+.station-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 0 2px;
+}
+
+.station-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* Green accent bar before section title */
+.station-group-title::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+
+/* Station count pill */
+.station-group-summary {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+/* Gap between rows inside a section */
+.station-group-list-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Backup card — white card with star badge ───────────────── */
+.station-group-backup {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.station-group-list-compact .figma-nearby-card {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.station-group-list-compact .figma-nearby-card:last-child {
+  border-bottom: none;
+}
+
+/* ── Station list gap ───────────────────────────────────────── */
+.station-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VISUAL POLISH PASS — full 10-item spec
+   Appended last so cascade wins everywhere.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── 0. Color tokens ────────────────────────────────────────── */
+:root {
+  --polish-dark:    #0D1B2A;
+  --polish-green:   #22C55E;
+  --polish-bg:      #F8FAFC;
+  --polish-body:    #EEF2F0;
+  --polish-card:    #FFFFFF;
+  --polish-muted:   #6B7280;
+  --polish-border:  #E2E8F0;
+  --polish-gold:    #F5A623;
+  --polish-green-lt:#86EFAC;
+}
+
+/* ── 1. Typography hierarchy ────────────────────────────────── */
+
+/* Hero station name — fluid, heavy, tight */
+.best-station-card .station-card-title,
+.best-station-card .best-station-title,
+.figma-hero-card  .best-station-title {
+  font-size: clamp(20px, 4.8vw, 26px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: #fff;
+  /* Clamp to 2 lines max */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Ensure the text column inside the hero card can't grow wider than its flex slot */
+.best-station-card .station-card-main,
+.best-station-card .figma-hero-copy,
+.best-station-card .station-card-copy {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+/* The .best-station-copy already has a built-in max-width that reserves space
+   for the absolutely-positioned fuel icon — no extra title padding needed. */
+
+/* Section headings */
+.station-group-title,
+.app-header-title {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Meta / distance — lighter weight */
+.station-card-distance,
+.station-card-updated,
+.nearby-station-meta,
+.backup-station-meta,
+.best-station-meta {
+  font-weight: 500;
+  color: var(--polish-muted);
+}
+
+/* ── 2. Hero card ───────────────────────────────────────────── */
+.best-station-card {
+  background: var(--polish-dark);
+  position: relative;
+  /* Original CSS has margin: 16px 20px 0 which, in an RTL zero-padding container,
+     shifts the card 20px left (overflowing the shell) and leaves 20px gap on the right.
+     Zero out horizontal margins so the card fills the content column cleanly. */
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  /* Keep a small top gap so the section label breathes */
+  margin-top: 8px;
+}
+
+/* Radial green glow in top-right corner */
+.best-station-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 70% 20%,
+    rgba(34, 197, 94, 0.15),
+    transparent 50%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ensure all direct children sit above the glow */
+.best-station-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Gold crown / "أفضل" badge */
+.best-station-card .station-card-crown,
+.best-station-card .station-card-badge,
+.best-station-card .best-station-label {
+  background: linear-gradient(135deg, #F5A623, #E8910A) !important;
+  color: #0D1B2A !important;
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 8px rgba(245, 166, 35, 0.35);
+}
+
+/* Status badge stays green-tinted */
+.best-station-card .station-card-status,
+.best-station-card .queue-pill {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86EFAC;
+  border-radius: 999px;
+  padding: 6px 13px;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Green CTA "الاتجاهات" button */
+.best-station-card .best-station-cta,
+.best-station-card .station-card-action-map {
+  width: 100%;
+  height: 52px;
+  min-height: 52px;
+  background: #22C55E;
+  color: #0a3a1c;
+  border: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.best-station-card .best-station-cta:hover,
+.best-station-card .station-card-action-map:hover {
+  background: #16a34a;
+  color: #fff;
+}
+
+.best-station-card .best-station-cta:active,
+.best-station-card .station-card-action-map:active {
+  transform: scale(0.97);
+}
+
+/* "حفظ" save pill — dark glassy pill */
+.best-station-card .station-favorite-action {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  box-shadow: none;
+  transition: background 0.18s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.best-station-card .station-favorite-action:hover,
+.best-station-card .station-favorite-action.is-saved {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Distance/updated muted on hero */
+.best-station-card .station-card-distance,
+.best-station-card .station-card-updated {
+  color: rgba(148, 163, 184, 0.9);
+  font-weight: 500;
+}
+
+/* ── 3. Secondary (backup) card ─────────────────────────────── */
+.backup-station-card,
+.station-group-backup .backup-station-card {
+  background: #fff;
+  border: 1px solid var(--polish-border);
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+/* Soft yellow "بديل" / secondary badge */
+.backup-station-label {
+  background: #FFF3CD !important;
+  color: #92611A !important;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+/* Backup station name */
+.backup-station-title,
+.backup-station-card .station-card-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--polish-dark);
+}
+
+/* ── 4. Header bar ──────────────────────────────────────────── */
+.app-header {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 14px 16px 13px;
+  background: #fff;
+}
+
+/* Logo icon — 40×40, green bg */
+.app-header-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #22C55E;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.app-header-logo svg {
+  width: 22px;
+  height: 22px;
+  color: #fff;
+}
+
+/* Live pill — green-tinted, no border */
+.app-header-live {
+  background: rgba(34, 197, 94, 0.12);
+  border: none;
+  color: #22C55E;
+  font-weight: 700;
+  font-size: 11.5px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  transition: background 0.18s ease;
+}
+
+.app-header-live-dot {
+  background: #22C55E;
+  width: 6px;
+  height: 6px;
+}
+
+/* ── 5. Bottom nav — dark navy, rounded top, white active pill ─ */
+.bottom-nav {
+  /* Override white pill from previous block */
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 76px;
+  border-radius: 24px 24px 0 0;
+  background: var(--polish-dark) !important;
+  border: none !important;
+  box-shadow: 0 -4px 24px rgba(13, 27, 42, 0.18) !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-around;
+  gap: 6px;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+
+/* Inactive nav items — white-ish icons, no label */
+.nav-item {
+  flex: 0 0 auto;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  border-radius: 16px;
+  min-height: 48px;
+  padding: 8px 12px;
+  transform: none !important;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.nav-item:hover,
+.nav-item:focus-visible {
+  color: rgba(255, 255, 255, 0.75) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Active tab — white pill with dark text */
+.nav-item.active {
+  flex: 1 1 auto !important;
+  background: #ffffff !important;
+  color: var(--polish-dark) !important;
+  border-radius: 14px;
+  gap: 8px;
+  box-shadow: 0 2px 12px rgba(255, 255, 255, 0.15);
+  transform: none !important;
+}
+
+.nav-item.active svg {
+  transform: none !important;
+  filter: none !important;
+  color: var(--polish-dark);
+}
+
+/* Labels: hidden on inactive, visible on active */
+.nav-label {
+  display: none;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: inherit;
+  transition: none;
+}
+
+.nav-item.active .nav-label {
+  display: inline;
+  color: var(--polish-dark) !important;
+  font-weight: 800;
+}
+
+/* Press feedback */
+.nav-item:active      { transform: scale(0.95) !important; }
+.nav-item.active:active { transform: scale(0.97) !important; }
+
+/* ── 6. Section label "أفضل محطة" ──────────────────────────── */
+.station-group-hero::before {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #6B7280 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: none !important;
+  padding-bottom: 8px !important;
+}
+
+/* ── 7. Spacing ─────────────────────────────────────────────── */
+.app-content {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* The .layout grid auto-column sizes to content (~481px) in a 375px viewport,
+   causing the panel to overflow the viewport to the left in RTL.
+   Fix: explicitly set the single grid column to 100% of the container so the
+   auto-track is bounded, then allow items to shrink with min-width:0. */
+.layout {
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.panel.list-panel,
+.panel.map-panel,
+.panel.details-panel {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 12px gap between cards inside sections */
+.station-group-list-compact {
+  gap: 12px;
+}
+
+/* 8px gap between section label and card */
+.station-group-hero {
+  margin-top: 8px;
+  gap: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 12px gap between top-level list sections */
+.station-list {
+  gap: 12px;
+}
+
+/* ── 8. Color system enforcement ────────────────────────────── */
+
+/* App background */
+body {
+  background: var(--polish-body) !important;
+}
+
+.phone-screen,
+.app-shell {
+  background: var(--polish-bg);
+}
+
+/* Card backgrounds */
+.nearby-station-row,
+.figma-nearby-card,
+.account-card,
+.station-group {
+  background: var(--polish-card);
+  border-color: var(--polish-border);
+}
+
+/* Muted text uniformity */
+.station-card-distance,
+.station-card-updated,
+.nearby-station-meta,
+.backup-station-meta {
+  color: var(--polish-muted);
+}
+
+/* ── 9. Micro-details ───────────────────────────────────────── */
+
+/* Global cursor: pointer on all interactive elements */
+button,
+[role="button"],
+.nav-item,
+.station-card,
+.nearby-station-row,
+.figma-nearby-card,
+.backup-station-card,
+.best-station-card,
+.station-card-row-action,
+.account-station-button {
+  cursor: pointer;
+}
+
+/* Universal transition base */
+.nav-item,
+.station-card,
+.nearby-station-row,
+.figma-nearby-card,
+.backup-station-card,
+.station-card-row-action,
+.account-station-button,
+.station-favorite-action,
+.app-header-live {
+  transition: all 0.18s ease;
+}
+
+/* Desktop hover: cards lift slightly */
+@media (hover: hover) and (pointer: fine) {
+  .nearby-station-row:hover,
+  .figma-nearby-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.1);
+  }
+
+  .backup-station-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  }
+}
+
+/* ── Ensure bottom nav doesn't overlap scrollable content ────── */
+.app-content {
+  padding-bottom: 100px;
+}
+
+/* ╔═══════════════════════════════════════════════════════════════╗
+   ║  POLISH V2 — full design-match per latest spec               ║
+   ║  This block is appended LAST and overrides every rule above. ║
+   ╚═══════════════════════════════════════════════════════════════╝ */
+
+/* ── 0. Color tokens v2 ─────────────────────────────────────── */
+:root {
+  --p2-page:         #F2F2F2;
+  --p2-text:         #111111;
+  --p2-text-2:       #555555;
+  --p2-muted:        #888888;
+  --p2-meta:         #666666;
+  --p2-green:        #22C55E;
+  --p2-green-deep:   #16A34A;
+  --p2-green-tint:   rgba(34, 197, 94, 0.12);
+  --p2-yellow:       #F5C518;
+  --p2-yellow-text:  #7A5C00;
+  --p2-card:         #FFFFFF;
+  --p2-card-shadow:        0 2px 8px rgba(0, 0, 0, 0.08);
+  --p2-list-shadow:        0 2px 8px rgba(0, 0, 0, 0.07);
+  --p2-card-shadow-hover:  0 4px 16px rgba(0, 0, 0, 0.12);
+  --p2-border:       rgba(0, 0, 0, 0.06);
+  --p2-divider:      #E5E5E5;
+  --p2-info-bg:      #F8F8F8;
+  --p2-nav-bg:       #0D1B2A;
+  --p2-hero-grad:    linear-gradient(160deg, #1A6B3A 0%, #0D4A25 65%, #0A3D1F 100%);
+  --p2-crown-bg:     #1A1A1A;
+}
+
+/* ── 1. Global resets / page background ─────────────────────── */
+* { -webkit-tap-highlight-color: transparent; }
+
+html { background: var(--p2-page) !important; }
+
+body {
+  background: var(--p2-page) !important;
+  font-family: 'Cairo', 'Segoe UI', system-ui, -apple-system, sans-serif !important;
+}
+
+/* App shell stays plain — body bg shows through */
+.phone-screen,
+.app-shell {
+  background: var(--p2-page) !important;
+}
+
+.app-shell { display: flex; flex-direction: column; }
+
+/* Scroll container — hide scrollbar */
+.app-content {
+  background: transparent !important;
+  padding: 0 16px 100px !important;
+  scrollbar-width: none !important;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.app-content::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+/* ── 2. Header bar — white with bottom border ────────────────── */
+.app-header {
+  background: #fff !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--p2-border) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-shrink: 0;
+  transition: none !important;
+}
+
+/* Reorder children visually — RTL: text rightmost, then live, then logo on the LEFT.
+   HTML order is: logo, text, live → use `order` to flip. */
+.app-header-text  { order: 1; flex: 1 1 auto; min-width: 0; }
+.app-header-live  { order: 2; }
+.app-header-logo  { order: 3; }
+
+.app-header-title {
+  margin: 0 !important;
+  font-size: 17px !important;
+  font-weight: 800 !important;
+  line-height: 1.15 !important;
+  color: var(--p2-text) !important;
+  letter-spacing: -0.01em;
+}
+
+.app-header-subtitle {
+  margin: 2px 0 0 !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+  color: var(--p2-muted) !important;
+}
+
+.app-header-live {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  flex-shrink: 0;
+  padding: 3px 8px !important;
+  border-radius: 10px !important;
+  border: 0 !important;
+  background: var(--p2-green-tint) !important;
+  color: var(--p2-green-deep) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+.app-header-live-dot {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: var(--p2-green) !important;
+}
+
+/* Logo / fuel icon button — left side */
+.app-header-logo {
+  flex-shrink: 0;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 10px !important;
+  background: var(--p2-green) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.30) !important;
+  transition: transform 0.18s ease;
+}
+.app-header-logo:active { transform: scale(0.96); }
+
+.app-header-logo svg {
+  width: 22px !important;
+  height: 22px !important;
+  color: #fff !important;
+}
+
+/* ── 3. Layout / panel wrappers ─────────────────────────────── */
+.layout {
+  grid-template-columns: minmax(0, 1fr) !important;
+  overflow: visible !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-top: 12px !important;
+  gap: 12px !important;
+}
+
+.panel.list-panel,
+.panel.map-panel,
+.panel.details-panel {
+  min-width: 0 !important;
+  width: 100% !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  box-sizing: border-box;
+}
+
+.station-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+/* ── 4. Station group wrappers ──────────────────────────────── */
+.station-group,
+.station-group-hero,
+.station-group-backup {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+/* Drop the "أفضل محطة" eyebrow text from earlier polish */
+.station-group-hero::before { display: none !important; }
+
+.station-group-hero {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  margin-top: 0 !important;
+}
+
+.station-group-list,
+.station-group-list-hero,
+.station-group-list-compact {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+
+/* Section title row */
+.station-group-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin: 16px 0 10px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.station-group-title {
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--p2-text) !important;
+  text-align: right !important;
+  letter-spacing: -0.01em;
+  display: block !important;
+}
+
+.station-group-title::before { display: none !important; }
+
+.station-group-summary {
+  display: none !important;
+}
+
+/* ── 5. HERO CARD — dark green gradient with vignette ────────── */
+.best-station-card,
+.station-card-best,
+.station-card-hero,
+.figma-hero-card {
+  position: relative !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 20px !important;
+  border: 0 !important;
+  border-radius: 20px !important;
+  background: var(--p2-hero-grad) !important;
+  color: #fff !important;
+  overflow: hidden !important;
+  box-shadow: var(--p2-card-shadow) !important;
+  min-height: 0 !important;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+/* Kill any pre-existing decorative pseudo-elements */
+.best-station-card::before,
+.station-card-best::before,
+.hero-card::before {
+  display: none !important;
+  content: none !important;
+}
+
+/* Bottom dark vignette via ::after */
+.best-station-card::after,
+.station-card-best::after,
+.station-card-hero::after,
+.figma-hero-card::after {
+  content: '' !important;
+  display: block !important;
+  position: absolute !important;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.30), transparent) !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  opacity: 1 !important;
+  inset: auto 0 0 0;
+  border-radius: 0 0 20px 20px;
+}
+
+/* Lift all hero content above the vignette */
+.best-station-card > *,
+.best-station-card .best-station-body > *,
+.best-station-card .best-station-copy > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Hero body — block flow */
+.best-station-card .best-station-body {
+  display: block !important;
+  position: relative !important;
+  z-index: 1 !important;
+  padding: 0 !important;
+  min-height: 0;
+}
+
+/* Hide the absolute fuel-icon — design has no icon on hero */
+.best-station-card .best-station-icon,
+.station-card-best .station-card-leading,
+.station-card-hero .station-card-leading {
+  display: none !important;
+}
+
+/* Hero copy column — right-aligned column */
+.best-station-card .best-station-copy {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  text-align: right !important;
+  direction: rtl !important;
+}
+
+/* "الأفضل الآن 👑" badge — black + gold, top right */
+.best-station-card .best-station-label,
+.best-station-card .station-card-crown,
+.best-station-card .station-card-badge,
+.best-station-card .badge-best {
+  position: static !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 0 12px !important;
+  padding: 5px 12px !important;
+  border-radius: 20px !important;
+  background: var(--p2-crown-bg) !important;
+  color: var(--p2-yellow) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+  align-self: flex-end !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  border: 0 !important;
+}
+
+/* Station name — large white, max 2 lines */
+.best-station-card .best-station-title,
+.best-station-card .station-card-title {
+  margin: 4px 0 10px !important;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+  letter-spacing: -0.02em !important;
+  color: #fff !important;
+  text-align: right !important;
+  direction: rtl !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+/* Status badge ("طابور خفيف") inside hero — pill */
+.best-station-card .station-card-status,
+.best-station-card .queue-pill {
+  align-self: flex-end !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 0 14px !important;
+  padding: 4px 14px !important;
+  border-radius: 20px !important;
+  min-height: 0 !important;
+  background: var(--p2-green) !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+  letter-spacing: 0 !important;
+}
+.best-station-card .station-card-status.station-card-status-light,
+.best-station-card .station-card-status.station-card-status-unknown,
+.best-station-card .station-card-status.station-card-status-uncertain {
+  background: var(--p2-yellow) !important;
+  color: var(--p2-yellow-text) !important;
+}
+.best-station-card .station-card-status.station-card-status-no_fuel {
+  background: #DC2626 !important;
+  color: #fff !important;
+}
+.best-station-card .station-card-status.station-card-status-busy,
+.best-station-card .station-card-status.station-card-status-crowded {
+  background: #F97316 !important;
+  color: #fff !important;
+}
+
+/* Meta row inside the hero — top + bottom dividers, evenly spaced */
+.best-station-card .station-card-meta-row,
+.best-station-card .best-station-meta,
+.best-station-card .meta-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-around !important;
+  gap: 8px !important;
+  margin: 0 0 14px !important;
+  padding: 12px 0 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  width: 100% !important;
+  direction: rtl !important;
+  font-size: 12px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  flex-wrap: wrap;
+}
+
+.best-station-card .station-card-meta-item {
+  flex: 1 1 0;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+}
+
+.best-station-card .station-card-meta-separator {
+  color: rgba(255, 255, 255, 0.30) !important;
+  opacity: 1 !important;
+}
+
+/* Hide the legacy bottom row (distance / queue-pill / updated) — meta row already shows distance */
+.best-station-card .station-card-bottom {
+  display: none !important;
+}
+
+/* Hero CTA "افتح في خرائط Google" — white pill, full width */
+.best-station-card .station-card-action-map,
+.best-station-card .best-station-cta,
+.best-station-card .station-card-action {
+  width: 100% !important;
+  height: 52px !important;
+  min-height: 52px !important;
+  margin: 0 !important;
+  padding: 0 18px !important;
+  border: 0 !important;
+  border-radius: 50px !important;
+  background: #fff !important;
+  color: var(--p2-text) !important;
+  font-family: inherit !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  cursor: pointer !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+  text-decoration: none !important;
+  letter-spacing: 0 !important;
+}
+.best-station-card .station-card-action-map:hover,
+.best-station-card .best-station-cta:hover,
+.best-station-card .station-card-action:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+.best-station-card .station-card-action-map:active,
+.best-station-card .best-station-cta:active,
+.best-station-card .station-card-action:active {
+  transform: scale(0.97) !important;
+}
+
+/* CTA actions wrapper — clean spacing */
+.best-station-card .station-card-actions {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+/* Save button "حفظ ☆" — translucent dark pill, right-aligned */
+.best-station-card .station-favorite-action {
+  align-self: flex-end !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 10px 0 0 !important;
+  padding: 8px 16px !important;
+  min-height: 0 !important;
+  border-radius: 20px !important;
+  border: 1px solid rgba(255, 255, 255, 0.30) !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  transition: background 0.18s ease, transform 0.18s ease !important;
+}
+.best-station-card .station-favorite-action:hover,
+.best-station-card .station-favorite-action.is-saved {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: #fff !important;
+}
+.best-station-card .station-favorite-action:active { transform: scale(0.97); }
+
+/* ── 6. STATION LIST CARDS — white compact rows ──────────────── */
+.station-card.station-card-compact,
+.figma-nearby-card,
+.nearby-station-row,
+.station-card-backup,
+.backup-station-card {
+  position: relative !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 14px 16px !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: var(--p2-card) !important;
+  color: var(--p2-text) !important;
+  box-shadow: var(--p2-list-shadow) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  direction: rtl !important;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+  min-height: 84px;
+  box-sizing: border-box;
+  overflow: visible !important;
+  backdrop-filter: none !important;
+}
+
+/* Card content column */
+.station-card-compact .station-card-content,
+.nearby-station-copy,
+.backup-station-copy {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  gap: 4px !important;
+  text-align: right !important;
+  direction: rtl !important;
+}
+
+/* Station name — 17px bold */
+.station-card-compact .station-card-title,
+.nearby-station-title,
+.backup-station-title {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  color: var(--p2-text) !important;
+  text-align: right !important;
+  letter-spacing: -0.01em !important;
+  width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* Status pill — yellow by default */
+.station-card-compact .station-card-status,
+.nearby-station-row .station-card-status {
+  align-self: flex-end !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  margin: 4px 0 !important;
+  padding: 3px 12px !important;
+  border-radius: 20px !important;
+  min-height: 0 !important;
+  background: var(--p2-yellow) !important;
+  color: var(--p2-yellow-text) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+.station-card-compact .station-card-status.station-card-status-available {
+  background: var(--p2-green) !important;
+  color: #fff !important;
+}
+.station-card-compact .station-card-status.station-card-status-no_fuel {
+  background: #DC2626 !important;
+  color: #fff !important;
+}
+.station-card-compact .station-card-status.station-card-status-busy,
+.station-card-compact .station-card-status.station-card-status-crowded {
+  background: #F97316 !important;
+  color: #fff !important;
+}
+
+/* Bottom meta row — distance · time */
+.station-card-compact .station-card-bottom {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 2px 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.station-card-compact .station-card-distance,
+.station-card-compact .station-card-updated,
+.nearby-station-meta,
+.backup-station-meta {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--p2-meta) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  background: transparent !important;
+}
+
+/* Hide queue-pill in compact rows — status badge above already shows it */
+.station-card-compact .queue-pill,
+.nearby-station-row .queue-pill {
+  display: none !important;
+}
+
+/* Fuel-icon panel on the trailing side (LEFT in RTL) */
+.station-card-compact .station-card-leading,
+.nearby-station-icon,
+.backup-station-icon {
+  flex: 0 0 40px !important;
+  width: 40px !important;
+  height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 10px !important;
+  background: var(--p2-green-tint) !important;
+  box-shadow: none !important;
+  order: 2;
+}
+
+.station-card-compact .station-card-fuel-icon,
+.nearby-station-icon .station-icon-img,
+.backup-station-icon .station-icon-img {
+  width: 22px !important;
+  height: 22px !important;
+  background: transparent !important;
+  filter: none !important;
+}
+
+.station-card-compact .station-card-fuel-icon img,
+.nearby-station-row img.station-icon-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+/* Chevron → small left-pointing arrow circle */
+.station-card-compact .station-card-chevron,
+.nearby-station-row .station-card-row-action {
+  flex: 0 0 32px !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #333 !important;
+  border: 0 !important;
+  padding: 0 !important;
+  cursor: pointer;
+  order: 3;
+  margin: 0 !important;
+}
+
+.station-card-compact .station-card-chevron svg,
+.nearby-station-row .station-card-row-action svg {
+  width: 14px !important;
+  height: 14px !important;
+  /* Original svg arrow points right ("m7 4 6 6-6 6") — flip to point LEFT */
+  transform: scaleX(-1);
+}
+
+/* Hide CTA button on compact rows — only hero has it */
+.station-card-compact .station-card-actions {
+  display: none !important;
+}
+
+/* ── 7. Backup card variant ──────────────────────────────────── */
+.station-card-backup .station-card-badge,
+.station-card-backup .station-card-crown,
+.backup-station-label {
+  background: var(--p2-yellow) !important;
+  color: var(--p2-yellow-text) !important;
+  border-radius: 20px !important;
+  padding: 4px 12px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+  box-shadow: none !important;
+  border: 0 !important;
+  margin-bottom: 4px;
+}
+
+/* ── 8. Bottom navigation v2 — dark navy, green circle on active ── */
+.bottom-nav {
+  position: absolute !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: auto !important;
+  height: 68px !important;
+  margin: 0 !important;
+  padding: 10px 24px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+  background: var(--p2-nav-bg) !important;
+  border: 0 !important;
+  border-radius: 28px 28px 0 0 !important;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-around !important;
+  gap: 0 !important;
+  grid-template-columns: unset !important;
+  overflow: visible !important;
+  z-index: 100;
+  backdrop-filter: none !important;
+  direction: ltr;
+}
+
+/* Hide legacy slider indicator */
+.bottom-nav .nav-indicator { display: none !important; }
+
+/* All tabs (inactive) */
+.bottom-nav .nav-item {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  height: 56px !important;
+  min-height: 56px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  display: inline-flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  cursor: pointer;
+  transform: none !important;
+  transition: color 0.18s ease;
+  position: relative;
+}
+
+.bottom-nav .nav-item svg {
+  width: 22px !important;
+  height: 22px !important;
+  stroke-width: 1.8;
+  transform: none !important;
+  filter: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transition: none !important;
+  color: inherit !important;
+}
+
+.bottom-nav .nav-label {
+  display: block !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: inherit !important;
+  letter-spacing: 0 !important;
+  margin: 0 !important;
+  transition: none !important;
+}
+
+.bottom-nav .nav-item:hover,
+.bottom-nav .nav-item:focus-visible {
+  color: rgba(255, 255, 255, 0.75) !important;
+  background: transparent !important;
+}
+
+/* Active tab — green circle around icon, white label below */
+.bottom-nav .nav-item.active {
+  flex: 1 1 0 !important;
+  background: transparent !important;
+  color: #fff !important;
+  gap: 2px !important;
+  transform: none !important;
+}
+
+.bottom-nav .nav-item.active svg {
+  width: 24px !important;
+  height: 24px !important;
+  padding: 12px;
+  box-sizing: content-box;
+  border-radius: 50%;
+  background: var(--p2-green) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.40);
+}
+
+.bottom-nav .nav-item.active .nav-label {
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+}
+
+.bottom-nav .nav-item:active { transform: scale(0.96) !important; }
+
+/* ── 9. Misc legacy elements (info-notice, secondary buttons) ── */
+.info-notice {
+  margin: 14px 0 24px !important;
+  padding: 12px 14px !important;
+  background: var(--p2-card) !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: var(--p2-list-shadow) !important;
+}
+.info-notice p {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--p2-muted) !important;
+  text-align: right !important;
+  line-height: 1.5;
+}
+.info-notice-icon {
+  background: var(--p2-green-tint) !important;
+  color: var(--p2-green-deep) !important;
+  font-weight: 700 !important;
+}
+
+/* "عرض المزيد" / "عرض باقي المحطات" — outline green button */
+.secondary-button {
+  width: 100% !important;
+  min-height: 44px !important;
+  margin: 8px 0 0 !important;
+  padding: 10px 16px !important;
+  border: 1.5px solid var(--p2-green) !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+  color: var(--p2-green) !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+.secondary-button:hover,
+.secondary-button:focus-visible {
+  background: var(--p2-green-tint) !important;
+  border-color: var(--p2-green) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ── 10. Search & account screens — keep neutral background ── */
+.search-field input,
+.area-filter select {
+  background: #fff !important;
+  border: 1px solid var(--p2-border) !important;
+  box-shadow: none !important;
+}
+
+.account-card {
+  background: #fff !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  box-shadow: var(--p2-list-shadow) !important;
+  padding: 16px !important;
+}
+.account-card h3 { color: var(--p2-text) !important; font-size: 15px !important; }
+.account-card p { color: var(--p2-text-2) !important; font-size: 13px !important; font-weight: 500 !important; }
+
+/* ── 11. Micro-interactions ─────────────────────────────────── */
+.station-card.station-card-compact:active,
+.figma-nearby-card:active,
+.nearby-station-row:active,
+.backup-station-card:active {
+  transform: scale(0.99);
+  transition: transform 0.1s;
+}
+
+.best-station-card:active,
+.station-card-best:active {
+  transform: scale(0.995);
+  transition: transform 0.1s;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .station-card.station-card-compact:hover,
+  .figma-nearby-card:hover,
+  .nearby-station-row:hover,
+  .backup-station-card:hover {
+    box-shadow: var(--p2-card-shadow-hover) !important;
+    transform: translateY(-1px);
+  }
+}
+
+/* ── 12. Make sure the phone-frame inner area also uses the page bg
+       on desktop preview, so the polished design looks right outside
+       the mobile media query too. ─────────────────────────────── */
+.phone-screen {
+  background: var(--p2-page) !important;
+  border-radius: 40px;
+}
+@media (max-width: 768px) {
+  .phone-screen { border-radius: 0; background: var(--p2-page) !important; }
+}
+
+/* ╔══════════════════════════════════════════════════════════════════╗
+   ║  DESIGN V3 — matches Shale.html design handoff (app.jsx)        ║
+   ║  Overrides POLISH V2. Applied LAST in cascade.                  ║
+   ╚══════════════════════════════════════════════════════════════════╝ */
+
+/* ── 0. Design tokens v3 ──────────────────────────────────────────── */
+:root {
+  /* Page */
+  --d3-page:          #f8fafc;
+  /* Hero (calm theme) */
+  --d3-hero:          #0f172a;
+  --d3-hero-acc:      #22c55e;
+  --d3-hero-ink:      #0a3a1c;
+  --d3-hero-chip:     rgba(34, 197, 94, 0.16);
+  --d3-hero-chip-t:   #86efac;
+  --d3-hero-panel:    #1e293b;
+  /* Cards */
+  --d3-border:        #e2e8f0;
+  --d3-text:          #0f172a;
+  --d3-muted:         #64748b;
+  --d3-card:          #ffffff;
+  --d3-shadow:        0 1px 3px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.04);
+  /* Nav */
+  --d3-nav:           #ffffff;
+  --d3-nav-act:       #0f172a;
+  /* Status pill — pastel semantic */
+  --d3-avail-bg:      #dcfce7;   --d3-avail-tx: #15803d;  --d3-avail-dt: #22c55e;
+  --d3-light-bg:      #fef3c7;   --d3-light-tx: #a16207;  --d3-light-dt: #f59e0b;
+  --d3-busy-bg:       #fee2e2;   --d3-busy-tx:  #b91c1c;  --d3-busy-dt:  #ef4444;
+  --d3-close-bg:      #e2e8f0;   --d3-close-tx: #475569;  --d3-close-dt: #94a3b8;
+}
+
+/* ── 1. Page & shell background ───────────────────────────────────── */
+html, body {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(14, 122, 50, 0.08), transparent 40%),
+    radial-gradient(circle at 80% 90%, rgba(245, 201, 58, 0.08), transparent 40%),
+    #eef2f0 !important;
+}
+.phone-screen,
+.app-shell { background: var(--d3-page) !important; }
+@media (max-width: 768px) {
+  .phone-screen { background: var(--d3-page) !important; }
+}
+
+/* ── 2. Header ────────────────────────────────────────────────────── */
+.app-header { background: var(--d3-page) !important; }
+
+/* Live pill → white + border (not green-tint) */
+.app-header-live {
+  background: #fff !important;
+  border: 1px solid var(--d3-border) !important;
+  color: var(--d3-text) !important;
+  padding: 6px 10px !important;
+  border-radius: 999px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+}
+.app-header-live-dot { background: #16a34a !important; }
+
+/* Logo box — keep green */
+.app-header-logo {
+  background: #16a34a !important;
+  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.28) !important;
+}
+
+/* ── 3. HERO CARD — dark navy ─────────────────────────────────────── */
+.best-station-card,
+.station-card-best,
+.hero-card {
+  background: var(--d3-hero) !important;
+  border-radius: 24px !important;
+  padding: 22px !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15) !important;
+  overflow: visible !important;
+}
+
+/* Kill vignette ::after */
+.best-station-card::after,
+.station-card-best::after,
+.hero-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Kill burst element */
+.best-station-card .best-station-burst { display: none !important; }
+
+/* Hero body — flex row in RTL: copy (right) | icon (left) */
+.best-station-card .best-station-body {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  direction: rtl !important;
+  position: static !important;
+}
+
+/* Copy column — full height, right-aligned content */
+.best-station-card .best-station-copy {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 0 !important;
+  max-width: none !important;
+  padding: 0 !important;
+  width: auto !important;
+  text-align: right !important;
+  direction: rtl !important;
+}
+
+/* Fuel icon box — shown, dark panel, top-left in RTL */
+.best-station-card .best-station-icon {
+  display: flex !important;
+  position: static !important;
+  top: auto !important; right: auto !important;
+  left: auto !important; bottom: auto !important;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 14px !important;
+  background: var(--d3-hero-panel) !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.best-station-card .best-station-icon img.hero-icon,
+.best-station-card .best-station-icon .station-icon-img {
+  width: 22px !important;
+  height: 22px !important;
+  object-fit: contain !important;
+  filter: brightness(0) invert(1) !important;
+  opacity: 0.85 !important;
+}
+
+/* Crown badge — green, dark text */
+.best-station-card .best-station-label,
+.best-station-card .badge-best {
+  position: static !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 0 16px !important;
+  padding: 8px 14px !important;
+  border-radius: 999px !important;
+  background: var(--d3-hero-acc) !important;
+  color: var(--d3-hero-ink) !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  align-self: flex-start !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  letter-spacing: 0 !important;
+}
+
+/* Station name */
+.best-station-card .best-station-title {
+  margin: 0 0 12px !important;
+  padding: 0 !important;
+  font-size: 26px !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+  letter-spacing: -0.015em !important;
+  color: #fff !important;
+  text-align: right !important;
+  direction: rtl !important;
+  -webkit-line-clamp: 2 !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Hero status chip — semi-transparent on dark */
+.best-station-card .station-card-status {
+  background: var(--d3-hero-chip) !important;
+  color: var(--d3-hero-chip-t) !important;
+  margin: 0 0 14px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  padding: 7px 14px !important;
+  align-self: flex-start !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+/* Dot in hero status pill */
+.best-station-card .station-card-status::before {
+  content: '' !important;
+  display: inline-block !important;
+  width: 7px !important; height: 7px !important;
+  border-radius: 50% !important;
+  background: var(--d3-hero-acc) !important;
+  flex-shrink: 0 !important;
+}
+.best-station-card .station-card-status.station-card-status-light::before,
+.best-station-card .station-card-status.station-card-status-unknown::before {
+  background: #fbbf24 !important;
+}
+.best-station-card .station-card-status.station-card-status-light,
+.best-station-card .station-card-status.station-card-status-unknown {
+  background: rgba(246, 195, 67, 0.20) !important;
+  color: #fde68a !important;
+}
+.best-station-card .station-card-status.station-card-status-no_fuel {
+  background: rgba(220, 38, 38, 0.25) !important;
+  color: #fca5a5 !important;
+}
+.best-station-card .station-card-status.station-card-status-no_fuel::before { background: #ef4444 !important; }
+
+/* Hero meta row — pill-shaped items, no dividers */
+.best-station-card .station-card-meta-row {
+  border-top: none !important;
+  border-bottom: none !important;
+  padding: 0 0 14px !important;
+  margin: 0 !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+.best-station-card .station-card-meta-item {
+  background: var(--d3-hero-panel) !important;
+  color: #fff !important;
+  padding: 5px 10px !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+.best-station-card .station-card-meta-separator { display: none !important; }
+
+/* Hero CTA — green pill, dark text */
+.best-station-card .best-station-cta,
+.best-station-card.station-card-action-map {
+  width: 100% !important;
+  height: 52px !important;
+  margin: 20px 0 0 !important;
+  padding: 0 16px !important;
+  background: var(--d3-hero-acc) !important;
+  color: var(--d3-hero-ink) !important;
+  border: none !important;
+  border-radius: 14px !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  box-shadow: none !important;
+  transition: transform 0.1s ease, background 0.15s ease !important;
+}
+.best-station-card .best-station-cta:active {
+  transform: scale(0.97) !important;
+  background: #16a34a !important;
+}
+
+/* ── 4. BACKUP / SECONDARY CARD ───────────────────────────────────── */
+.station-card.backup-station-card {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  direction: rtl !important;
+  gap: 14px !important;
+  padding: 18px !important;
+  border-radius: 20px !important;
+  border: 1px solid var(--d3-border) !important;
+  background: var(--d3-card) !important;
+  box-shadow: var(--d3-shadow) !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+/* Reorder: icon first (rightmost in RTL), chevron last (leftmost) */
+.station-card.backup-station-card .backup-station-icon { order: -1 !important; }
+.station-card.backup-station-card .station-card-row-action { order: 1 !important; }
+
+/* Backup icon — 56px circle, status-colored */
+.station-card.backup-station-card .backup-station-icon {
+  flex: 0 0 56px !important;
+  width: 56px !important; height: 56px !important;
+  border-radius: 50% !important;
+  background: var(--d3-avail-bg) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.station-card.backup-station-card .backup-station-icon img {
+  width: 28px !important; height: 28px !important;
+}
+
+/* Status-colored backup icon via :has() */
+.station-card.backup-station-card:has(.station-card-status-light) .backup-station-icon,
+.station-card.backup-station-card:has(.station-card-status-unknown) .backup-station-icon {
+  background: var(--d3-light-bg) !important;
+}
+.station-card.backup-station-card:has(.station-card-status-no_fuel) .backup-station-icon,
+.station-card.backup-station-card:has(.station-card-status-busy) .backup-station-icon,
+.station-card.backup-station-card:has(.station-card-status-crowded) .backup-station-icon {
+  background: var(--d3-busy-bg) !important;
+}
+
+/* Backup copy column */
+.station-card.backup-station-card .backup-station-copy {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  direction: rtl !important;
+  text-align: right !important;
+  gap: 0 !important;
+}
+
+/* Backup label — gray pill (design: #f1f5f9) */
+.station-card.backup-station-card .backup-station-label {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 5px 12px !important;
+  border-radius: 999px !important;
+  background: #f1f5f9 !important;
+  color: var(--d3-text) !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  margin: 0 0 10px !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Backup station name */
+.station-card.backup-station-card .backup-station-title {
+  font-size: 19px !important;
+  font-weight: 800 !important;
+  color: var(--d3-text) !important;
+  letter-spacing: -0.01em !important;
+  margin: 0 !important;
+  line-height: 1.25 !important;
+}
+
+/* Status pill in backup card */
+.station-card.backup-station-card .station-card-status {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  margin: 10px 0 0 !important;
+  background: var(--d3-light-bg) !important;
+  color: var(--d3-light-tx) !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.station-card.backup-station-card .station-card-status::before {
+  content: '' !important;
+  display: inline-block !important;
+  width: 6px !important; height: 6px !important;
+  border-radius: 50% !important;
+  background: var(--d3-light-dt) !important;
+  flex-shrink: 0 !important;
+}
+.station-card.backup-station-card .station-card-status.station-card-status-available {
+  background: var(--d3-avail-bg) !important; color: var(--d3-avail-tx) !important;
+}
+.station-card.backup-station-card .station-card-status.station-card-status-available::before {
+  background: var(--d3-avail-dt) !important;
+}
+
+/* Backup meta row */
+.station-card.backup-station-card .station-card-meta-row {
+  border: none !important;
+  padding: 8px 0 0 !important;
+  margin: 0 !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+  color: var(--d3-muted) !important;
+}
+.station-card.backup-station-card .station-card-meta-item {
+  background: transparent !important;
+  color: var(--d3-muted) !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 0 !important;
+}
+.station-card.backup-station-card .station-card-meta-separator {
+  color: var(--d3-muted) !important;
+  opacity: 0.4 !important;
+}
+
+/* Backup chevron button */
+.station-card.backup-station-card .station-card-row-action {
+  flex: 0 0 28px !important;
+  width: 28px !important; height: 28px !important;
+  background: transparent !important;
+  border: 0 !important;
+  color: #cbd5e1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-size: 0 !important; /* hide sr-only text visually */
+}
+.station-card.backup-station-card .station-card-row-action::after {
+  content: '' !important;
+  display: block !important;
+  width: 7px !important; height: 7px !important;
+  border-left: 2px solid #cbd5e1 !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+  transform: rotate(45deg) !important;
+  flex-shrink: 0 !important;
+}
+
+/* ── 5. NEARBY STATION ROWS ───────────────────────────────────────── */
+.station-card.nearby-station-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  direction: rtl !important;
+  gap: 14px !important;
+  background: var(--d3-card) !important;
+  border: 1px solid var(--d3-border) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+  padding: 16px !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+/* Nearby icon — 48px status-colored circle */
+.station-card.nearby-station-row .nearby-station-icon {
+  flex: 0 0 48px !important;
+  width: 48px !important; height: 48px !important;
+  border-radius: 50% !important;
+  background: var(--d3-avail-bg) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  order: 0 !important;
+}
+.station-card.nearby-station-row .nearby-station-icon img {
+  width: 24px !important; height: 24px !important;
+}
+
+/* Status-colored icon circles via :has() */
+.station-card.nearby-station-row:has(.station-card-status-light) .nearby-station-icon,
+.station-card.nearby-station-row:has(.station-card-status-unknown) .nearby-station-icon {
+  background: var(--d3-light-bg) !important;
+}
+.station-card.nearby-station-row:has(.station-card-status-no_fuel) .nearby-station-icon,
+.station-card.nearby-station-row:has(.station-card-status-busy) .nearby-station-icon,
+.station-card.nearby-station-row:has(.station-card-status-crowded) .nearby-station-icon {
+  background: var(--d3-busy-bg) !important;
+}
+.station-card.nearby-station-row:has(.station-card-status-closed) .nearby-station-icon {
+  background: var(--d3-close-bg) !important;
+}
+
+/* Nearby copy column */
+.station-card.nearby-station-row .nearby-station-copy {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  direction: rtl !important;
+  text-align: right !important;
+  gap: 0 !important;
+  order: 0 !important;
+}
+
+/* Nearby station name */
+.station-card.nearby-station-row .nearby-station-title {
+  margin: 0 !important;
+  font-size: 17px !important;
+  font-weight: 800 !important;
+  color: var(--d3-text) !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.25 !important;
+}
+
+/* Nearby status pill — pastel semantic with dot */
+.station-card.nearby-station-row .station-card-status {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  margin: 8px 0 0 !important;
+  background: var(--d3-light-bg) !important;
+  color: var(--d3-light-tx) !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  align-self: flex-start !important;
+}
+.station-card.nearby-station-row .station-card-status::before {
+  content: '' !important;
+  display: inline-block !important;
+  width: 6px !important; height: 6px !important;
+  border-radius: 50% !important;
+  background: var(--d3-light-dt) !important;
+  flex-shrink: 0 !important;
+}
+.station-card.nearby-station-row .station-card-status.station-card-status-available {
+  background: var(--d3-avail-bg) !important; color: var(--d3-avail-tx) !important;
+}
+.station-card.nearby-station-row .station-card-status.station-card-status-available::before {
+  background: var(--d3-avail-dt) !important;
+}
+.station-card.nearby-station-row .station-card-status.station-card-status-no_fuel,
+.station-card.nearby-station-row .station-card-status.station-card-status-busy,
+.station-card.nearby-station-row .station-card-status.station-card-status-crowded {
+  background: var(--d3-busy-bg) !important; color: var(--d3-busy-tx) !important;
+}
+.station-card.nearby-station-row .station-card-status.station-card-status-no_fuel::before,
+.station-card.nearby-station-row .station-card-status.station-card-status-busy::before,
+.station-card.nearby-station-row .station-card-status.station-card-status-crowded::before {
+  background: var(--d3-busy-dt) !important;
+}
+.station-card.nearby-station-row .station-card-status.station-card-status-closed {
+  background: var(--d3-close-bg) !important; color: var(--d3-close-tx) !important;
+}
+.station-card.nearby-station-row .station-card-status.station-card-status-closed::before {
+  background: var(--d3-close-dt) !important;
+}
+
+/* Nearby meta row — muted inline text */
+.station-card.nearby-station-row .station-card-meta-row {
+  border: none !important;
+  padding: 6px 0 0 !important;
+  margin: 0 !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+  color: var(--d3-muted) !important;
+  font-weight: 500 !important;
+  flex-wrap: wrap !important;
+}
+.station-card.nearby-station-row .station-card-meta-item {
+  background: transparent !important;
+  color: var(--d3-muted) !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+.station-card.nearby-station-row .station-card-meta-separator {
+  color: var(--d3-muted) !important;
+  opacity: 0.4 !important;
+  display: inline !important;
+}
+
+/* Nearby chevron button */
+.station-card.nearby-station-row .station-card-row-action {
+  flex: 0 0 28px !important;
+  width: 28px !important; height: 28px !important;
+  background: transparent !important;
+  border: 0 !important;
+  color: #cbd5e1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-size: 0 !important;
+  order: 1 !important;
+}
+.station-card.nearby-station-row .station-card-row-action::after {
+  content: '' !important;
+  display: block !important;
+  width: 7px !important; height: 7px !important;
+  border-left: 2px solid #cbd5e1 !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+  transform: rotate(45deg) !important;
+  flex-shrink: 0 !important;
+}
+
+/* ── 6. NEARBY SECTION — white card wrapper ───────────────────────── */
+/* Target any group that isn't hero, backup, or avoid */
+.station-group:not(.station-group-hero):not(.station-group-backup):not(.station-group-avoid) {
+  background: var(--d3-card) !important;
+  border: 1px solid var(--d3-border) !important;
+  border-radius: 20px !important;
+  padding: 18px 16px !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
+  margin: 0 !important;
+}
+
+/* Section header */
+.station-group:not(.station-group-hero):not(.station-group-backup) .station-group-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin: 0 4px 14px !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+/* Section title — flex row with accent bar in RTL */
+.station-group:not(.station-group-hero):not(.station-group-backup) .station-group-title {
+  display: inline-flex !important;
+  align-items: center !important;
+  direction: rtl !important;
+  gap: 8px !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: var(--d3-text) !important;
+  text-align: right !important;
+  letter-spacing: -0.01em !important;
+  margin: 0 !important;
+}
+/* Accent bar — appears on the RIGHT side in RTL (start of reading direction) */
+.station-group:not(.station-group-hero):not(.station-group-backup) .station-group-title::before {
+  content: '' !important;
+  display: inline-block !important;
+  width: 4px !important; height: 18px !important;
+  border-radius: 2px !important;
+  background: var(--d3-hero-acc) !important;
+  flex-shrink: 0 !important;
+}
+
+/* Row gap in list */
+.station-group-list-compact.nearby-list-card,
+.station-group-list-compact {
+  gap: 12px !important;
+}
+
+/* ── 7. BOTTOM NAV — white floating pill ─────────────────────────── */
+.bottom-nav {
+  bottom: 16px !important;
+  left: 14px !important;
+  right: 14px !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  background: var(--d3-nav) !important;
+  border: 1px solid var(--d3-border) !important;
+  border-radius: 22px !important;
+  padding: 8px !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08) !important;
+  gap: 6px !important;
+  align-items: center !important;
+  justify-content: space-around !important;
+  direction: ltr !important;
+}
+
+/* Inactive nav items — icon only, transparent */
+.bottom-nav .nav-item {
+  flex: 0 0 auto !important;
+  background: transparent !important;
+  color: #334155 !important;
+  border-radius: 16px !important;
+  height: auto !important;
+  min-height: 44px !important;
+  padding: 11px 14px !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  transform: none !important;
+}
+.bottom-nav .nav-item svg {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  width: 20px !important;
+  height: 20px !important;
+  color: inherit !important;
+}
+/* Hide label on inactive tabs */
+.bottom-nav .nav-item:not(.active) .nav-label { display: none !important; }
+
+/* Active nav item — dark expanding pill with label */
+.bottom-nav .nav-item.active {
+  flex: 1 1 auto !important;
+  background: var(--d3-nav-act) !important;
+  color: #fff !important;
+  padding: 11px 18px !important;
+  border-radius: 16px !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+  transform: none !important;
+}
+.bottom-nav .nav-item.active svg {
+  background: transparent !important;
+  color: #fff !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  width: 20px !important;
+  height: 20px !important;
+}
+.bottom-nav .nav-item.active .nav-label {
+  display: block !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+  margin: 0 !important;
+}
+.bottom-nav .nav-item:active { transform: scale(0.95) !important; }
+
+/* More padding so floating nav doesn't cover content */
+.app-content { padding-bottom: 130px !important; }
+
+/* ── 8. Hover interactions ────────────────────────────────────────── */
+@media (hover: hover) and (pointer: fine) {
+  .station-card.nearby-station-row:hover {
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10) !important;
+    transform: translateY(-1px) !important;
+  }
+  .station-card.backup-station-card:hover {
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.10) !important;
+    transform: translateY(-1px) !important;
+  }
+}
+.station-card.nearby-station-row:active,
+.station-card.backup-station-card:active {
+  transform: scale(0.99) !important;
+  transition: transform 0.1s !important;
+}
+.best-station-card:active { transform: scale(0.995) !important; }
+
+/* ── 9. Entrance animations ───────────────────────────────────────── */
+@keyframes d3HeroIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.best-station-card {
+  animation: d3HeroIn 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes d3RowIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.station-card.nearby-station-row {
+  animation: d3RowIn 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.station-card.nearby-station-row:nth-child(1) { animation-delay: 40ms; }
+.station-card.nearby-station-row:nth-child(2) { animation-delay: 90ms; }
+.station-card.nearby-station-row:nth-child(3) { animation-delay: 140ms; }
+.station-card.nearby-station-row:nth-child(4) { animation-delay: 190ms; }
+.station-card.nearby-station-row:nth-child(5) { animation-delay: 240ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .best-station-card,
+  .station-card.nearby-station-row {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ── 10. Font weight 900 available (Cairo) ───────────────────────── */
+/* (Font URL updated in index.html to include wght 900) */
+.best-station-card .best-station-title,
+.app-header-title {
+  font-variation-settings: 'wght' 800;
+}
+
+/* ── 11. Compact row corrections ──────────────────────────────────── */
+
+/* Hide the favorite action button in compact/backup rows (not in design spec) */
+.station-card.nearby-station-row .station-favorite-action,
+.station-card.backup-station-card .station-favorite-action {
+  display: none !important;
+}
+
+/* Remove ::after pseudo-chevron — the SVG inside the button is the real indicator */
+.station-card.nearby-station-row .station-card-row-action::after,
+.station-card.backup-station-card .station-card-row-action::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Row-action button — clean container */
+.station-card.nearby-station-row .station-card-row-action,
+.station-card.backup-station-card .station-card-row-action {
+  flex: 0 0 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: #cbd5e1 !important;
+  font-size: 0 !important;
+}
+
+/* Flip the right-pointing SVG (m7 4 6 6-6 6) to point LEFT for RTL forward navigation */
+.station-card.nearby-station-row .station-card-row-action svg,
+.station-card.backup-station-card .station-card-row-action svg {
+  width: 18px !important;
+  height: 18px !important;
+  transform: scaleX(-1) !important;
+  stroke: #cbd5e1 !important;
+  color: #cbd5e1 !important;
+  flex-shrink: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
