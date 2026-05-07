@@ -933,7 +933,10 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
   }
 
   // ── Path 2: cards present → in-place data patch, order untouched ─────────
-  const existingCards = stationList.querySelectorAll("[data-station-id]");
+  // Use "article[data-station-id]" — account screen injects li[data-station-id]
+  // for favorites/recent items; a bare [data-station-id] selector would match
+  // those and incorrectly trigger Path 2 while the account screen is still showing.
+  const existingCards = stationList.querySelectorAll("article[data-station-id]");
   if (existingCards.length > 0) {
     existingCards.forEach(function (card) {
       const station = projectedStations.find(function (s) { return s.id === card.dataset.stationId; });
@@ -954,7 +957,7 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
     };
     buildHomeDOM(restoredLayout, template, canExpandRadius);
     // Patch immediately so status reflects current data, not stale first-render data
-    stationList.querySelectorAll("[data-station-id]").forEach(function (card) {
+    stationList.querySelectorAll("article[data-station-id]").forEach(function (card) {
       var station = projectedStations.find(function (s) { return s.id === card.dataset.stationId; });
       if (station) patchCardData(card, station);
     });
