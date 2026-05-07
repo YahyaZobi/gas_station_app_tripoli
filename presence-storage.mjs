@@ -16,5 +16,10 @@ export function getAnonymousDeviceId(storage = globalThis.localStorage) {
 }
 
 function createAnonymousDeviceId() {
-  return `device-${crypto.randomUUID()}`;
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `device-${crypto.randomUUID()}`;
+  }
+  // Fallback for iOS <15.4 / older Safari
+  const rand = () => Math.random().toString(36).slice(2);
+  return `device-${rand()}${rand()}${rand()}`;
 }

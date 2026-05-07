@@ -162,7 +162,9 @@ export function createReportRecord({
   status,
   queueLevel,
   station,
-  id = `report-${crypto.randomUUID()}`,
+  id = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? `report-${crypto.randomUUID()}`
+    : `report-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`,
   createdAt = new Date().toISOString(),
 }) {
   return {

@@ -23,6 +23,13 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="theme-calm">
+    <div id="error-display" style="color:red;padding:20px;font-size:16px;"></div>
+    <script>
+window.onerror = function(msg, src, line) {
+  document.getElementById('error-display').innerText =
+    'Error: ' + msg + ' | ' + src + ':' + line;
+};
+</script>
     <div class="app-backdrop" aria-hidden="true"></div>
     <div class="phone-preview">
       <div class="phone-frame">
@@ -193,7 +200,7 @@
       <article class="station-card">
         <div class="station-card-leading" aria-hidden="true">
           <span class="station-card-fuel-icon station-icon-wrap">
-            <img src="/assets/gas-station.png" class="station-icon-img" alt="" aria-hidden="true" />
+            <img src="./assets/gas-station.png" class="station-icon-img" alt="" aria-hidden="true" />
           </span>
         </div>
         <div class="station-card-content">
@@ -271,6 +278,6 @@
     ></script>
     <script src="./config.js"></script>
     <script src="./places-enricher.js"></script>
-    <script type="module" src="./app.js?v=8"></script>
+    <script type="module" src="./app.js?v=9"></script>
   </body>
 </html>
