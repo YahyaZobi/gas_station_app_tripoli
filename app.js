@@ -196,7 +196,6 @@ const navIndicator = document.querySelector(".nav-indicator");
 
 const detailsFields = {
   distance: document.querySelector("#station-distance"),
-  queue: document.querySelector("#station-queue"),
   updated: document.querySelector("#station-updated"),
   reports: document.querySelector("#station-reports"),
   activityLabel: document.querySelector("#station-activity-label"),
@@ -429,12 +428,7 @@ async function handleReportSubmit(event) {
   );
 
   closeReportModal();
-  showSuccessToast(
-    `${getReportSuccessMessage(
-      selectedStation.name,
-      updatedStation ? getDisplayStatus(updatedStation) : "",
-    )} · شكراً على مساهمتك`,
-  );
+  showSuccessToast(`${getReportSuccessMessage(selectedStation.name, "")} · شكراً على مساهمتك`);
   render();
 }
 
@@ -1371,7 +1365,6 @@ function createStationCard(station, template, tone, variant = "default") {
     const title = fragment.querySelector(".station-card-title");
     const status = fragment.querySelector(".station-card-status");
     const distance = fragment.querySelector(".station-card-distance");
-    const queue = fragment.querySelector(".queue-pill");
     const updated = fragment.querySelector(".station-card-updated");
     const reports = fragment.querySelector(".station-card-reports");
     const activity = fragment.querySelector(".station-card-activity");
@@ -1379,10 +1372,9 @@ function createStationCard(station, template, tone, variant = "default") {
 
     title.textContent = station.name;
     const displayStatus = getDisplayStatus(station);
-    status.textContent = displayStatus;
+    status.textContent = "";
     status.classList.add(`station-card-status-${getDisplayStatusTone(displayStatus)}`);
     distance.textContent = formatDistanceLabel(station.distanceKm);
-    queue.textContent = getDriverFlowLabel(station);
     updated.textContent = getStationUpdatedText(station);
     reports.textContent = "";
     activity.textContent = "";
@@ -1571,7 +1563,7 @@ function patchCardData(card, station) {
   if (statusEl) {
     statusEl.className = "station-card-status";
     statusEl.classList.add(`station-card-status-${getDisplayStatusTone(displayStatus)}`);
-    statusEl.textContent = displayStatus;
+    statusEl.textContent = "";
   }
 
   const distEl = card.querySelector("[data-card-distance]");
@@ -1671,8 +1663,6 @@ function renderStationDetails(station) {
     stationEmpty.classList.remove("hidden");
     stationDetails.classList.add("hidden");
     stationTitle.textContent = "اختر محطة";
-    stationStatusBadge.textContent = "مسكر";
-    stationStatusBadge.className = "status-badge status-unknown";
     openReportModalButton.disabled = true;
     reportAccessMessage.textContent = "";
     return;
@@ -1682,11 +1672,8 @@ function renderStationDetails(station) {
   stationDetails.classList.remove("hidden");
 
   stationTitle.textContent = station.name;
-  stationStatusBadge.textContent = getDisplayStatus(station);
-  stationStatusBadge.className = `status-badge ${(STATUS_META[station.status] ?? STATUS_META.unknown).className}`;
 
   detailsFields.distance.textContent = formatDistanceLabel(station.distanceKm);
-  detailsFields.queue.textContent = getDriverFlowLabel(station);
   detailsFields.updated.textContent = getStationUpdatedText(station);
   detailsFields.reports.textContent = getDriverTrustLabel(station);
   detailsFields.activityLabel.textContent = getStationActivityText(station);
@@ -2292,7 +2279,6 @@ function openReportModal() {
   reportModalStationName.textContent = selectedStation.name;
   reportForm.reset();
   reportForm.elements.status.value = "available";
-  reportForm.elements.queueLevel.value = "short";
   reportModalBackdrop.classList.remove("hidden");
   document.body.classList.add("modal-open");
   showSuccessToast("وجودك يساعد تحسين دقة البيانات");

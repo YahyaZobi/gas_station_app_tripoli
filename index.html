@@ -63,9 +63,7 @@
                 </div>
 
                 <div class="legend" aria-label="حالات المحطات">
-                  <span><i class="dot green"></i>عالبومبة طول</span>
-                  <span><i class="dot yellow"></i>طابور خفيف</span>
-                  <span><i class="dot red"></i>زحمة</span>
+                  <span><i class="dot green"></i>متاحة</span>
                   <span><i class="dot gray"></i>مسكر</span>
                 </div>
 
@@ -115,7 +113,6 @@
                     <p class="section-label">تفاصيل المحطة</p>
                     <h2 id="station-title">اختر محطة</h2>
                   </div>
-                  <span class="status-badge status-unknown" id="station-status-badge">طابور خفيف</span>
                 </div>
 
                 <div id="station-empty" class="empty-state">
@@ -127,10 +124,6 @@
                     <div class="stat-card">
                       <dt>المسافة</dt>
                       <dd id="station-distance">-</dd>
-                    </div>
-                    <div class="stat-card">
-                      <dt>الزحمة</dt>
-                      <dd id="station-queue">-</dd>
                     </div>
                     <div class="stat-card">
                       <dt>آخر تحديث</dt>
@@ -155,7 +148,6 @@
                       <p class="section-label">بلاغ سريع</p>
                       <h3>بلّغ عن المحطة</h3>
                       <p class="report-copy">يتم احتساب البلاغ ضمن حالة المحطة خلال آخر 60 دقيقة.</p>
-                      <p class="report-hint">اللون الأصفر يعني طابور خفيف أو زحمة.</p>
                       <p class="report-passive-note">وجودك يساعد تحسين دقة البيانات</p>
                       <p class="report-access-message" id="report-access-message" role="status" aria-live="polite"></p>
                     </div>
@@ -213,7 +205,6 @@
           </div>
           <div class="station-card-bottom">
             <p class="station-card-distance"></p>
-            <span class="queue-pill"></span>
             <span class="station-card-updated"></span>
           </div>
           <div class="station-card-meta">
@@ -266,24 +257,6 @@
             </div>
           </fieldset>
 
-          <fieldset class="report-group">
-            <legend>مستوى الزحمة</legend>
-            <div class="report-options three-up">
-              <label class="choice-chip choice-chip-positive">
-                <input type="radio" name="queueLevel" value="short" checked />
-                <span>قصير</span>
-              </label>
-              <label class="choice-chip choice-chip-warning">
-                <input type="radio" name="queueLevel" value="medium" />
-                <span>متوسط</span>
-              </label>
-              <label class="choice-chip choice-chip-warning">
-                <input type="radio" name="queueLevel" value="long" />
-                <span>طويل</span>
-              </label>
-            </div>
-          </fieldset>
-
           <button type="submit" class="primary-button">تأكيد البلاغ</button>
         </form>
       </div>
@@ -298,6 +271,6 @@
     ></script>
     <script src="./config.js"></script>
     <script src="./places-enricher.js"></script>
-    <script type="module" src="./app.js?v=5"></script>
+    <script type="module" src="./app.js?v=6"></script>
   </body>
 </html>
