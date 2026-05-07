@@ -515,6 +515,27 @@ function render() {
   updateMapActionButtons();
   syncActiveTabUi();
 
+  // ── DEBUG: show user location at top of station list ─────────────────────
+  {
+    let dbg = document.getElementById("debug-location");
+    if (!dbg) {
+      dbg = document.createElement("p");
+      dbg.id = "debug-location";
+      dbg.style.cssText = "font-size:11px;color:#94a3b8;padding:4px 8px 0;margin:0;text-align:right;direction:rtl;font-family:monospace;";
+      stationList.parentNode.insertBefore(dbg, stationList);
+    }
+    if (state.hasUserLocation && state.userLocation) {
+      const lat = state.userLocation.latitude.toFixed(5);
+      const lng = state.userLocation.longitude.toFixed(5);
+      const text = `موقعك: ${lat}، ${lng}`;
+      dbg.textContent = text;
+      console.log("[DEBUG location]", text);
+    } else {
+      dbg.textContent = "موقعك: غير محدد";
+    }
+  }
+  // ── END DEBUG ─────────────────────────────────────────────────────────────
+
   if (!nearbyBaseStations.length) {
     stationList.innerHTML = "";
     clearMapMarkers();
@@ -865,7 +886,7 @@ function renderMap(enrichedStations, bestStation) {
       state.shouldCenterSelectedOnMap = false;
     }
 
-    mapFocusPill.textContent = `${selectedStation.name} · ${getDisplayStatus(selectedStation)}`;
+    mapFocusPill.textContent = selectedStation.name;
     renderMapStationBottomSheet(selectedStation);
   }).catch(() => {
     mapFocusPill.textContent = "تعذر تحميل Google Maps";
@@ -1449,12 +1470,11 @@ function createReferenceListCard(station, tone) {
 
 function createHeroCard(station) {
   const card = createStationCardElement(station, "recommended", "hero");
-  const statusLabel = getDisplayStatus(station);
   card.className = "station-card best-station-card hero-card figma-hero-card";
   card.innerHTML = `
     <div class="figma-hero-head">
       <div class="figma-hero-copy">
-        <span class="best-station-label badge-best badge-available">${statusLabel}</span>
+        <p class="station-card-status"></p>
         <h3 class="best-station-title title"></h3>
       </div>
       <div class="figma-hero-icon-wrap" aria-hidden="true">
@@ -1481,7 +1501,7 @@ function createCompactStationCard(station, tone) {
   const card = createStationCardElement(station, tone, "compact");
   card.className = "station-card nearby-station-row figma-nearby-card";
   card.dataset.stationStatus = station.status ?? "unknown";
-  card.setAttribute("aria-label", `${station.name} · ${getDisplayStatus(station)}`);
+  card.setAttribute("aria-label", station.name);
   card.innerHTML = `
     <div class="nearby-station-info">
       <div class="nearby-station-icon station-icon-wrap" aria-hidden="true">
@@ -2460,12 +2480,10 @@ function renderMapStationBottomSheet(station) {
 
   const distanceText = Number.isFinite(station.distanceKm) ? formatDistanceLabel(station.distanceKm) : "غير متاح";
   const etaText = getEstimatedArrivalText(station);
-  const statusText = getDisplayStatus(station);
 
   sheet.innerHTML = `
     <h3 class="map-station-sheet-title">${station.name}</h3>
     <p class="map-station-sheet-meta">${distanceText} · ${etaText}</p>
-    <p class="map-station-sheet-status">${statusText}</p>
     <button type="button" class="map-station-sheet-action" data-map-direction-button="true">الاتجاهات</button>
   `;
 
