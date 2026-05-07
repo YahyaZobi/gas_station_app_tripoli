@@ -5219,3 +5219,65 @@ html, body {
   box-shadow: none !important;
   border-radius: 0 !important;
 }
+
+/* ── 12. Temp: neutral traffic placeholder (until Places API) ─────── */
+/* DESIGN V3 uses specificity (0,3,0) on per-card-type selectors,      */
+/* so we match that here to guarantee we win the !important cascade.   */
+
+/* Strip badge styling — all three card types explicitly named          */
+.station-card.best-station-card .station-card-status,
+.station-card.hero-card .station-card-status,
+.station-card.backup-station-card .station-card-status,
+.station-card.nearby-station-row .station-card-status,
+.station-card.best-station-card .status-pill,
+.station-card.backup-station-card .status-pill,
+.station-card.nearby-station-row .status-pill {
+  font-size: 0 !important;
+  color: transparent !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  display: block !important;
+  line-height: 1 !important;
+  margin-top: 2px !important;
+  margin-bottom: 0 !important;
+  box-shadow: none !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+/* Remove the colored dot pseudo-element on all card types */
+.station-card.best-station-card .station-card-status::before,
+.station-card.hero-card .station-card-status::before,
+.station-card.backup-station-card .station-card-status::before,
+.station-card.nearby-station-row .station-card-status::before,
+.station-card.best-station-card .status-pill::before,
+.station-card.backup-station-card .status-pill::before,
+.station-card.nearby-station-row .status-pill::before {
+  content: none !important;
+  display: none !important;
+}
+
+/* Inject neutral placeholder — Unicode escapes avoid @charset issues   */
+/* لا توجد بيانات حركة متاحة حالياً                                    */
+.station-card.best-station-card .station-card-status::after,
+.station-card.hero-card .station-card-status::after,
+.station-card.backup-station-card .station-card-status::after,
+.station-card.nearby-station-row .station-card-status::after {
+  content: '\0644\0627  \062A\0648\062C\062F  \0628\064A\0627\0646\0627\062A  \062D\0631\0643\0629  \0645\062A\0627\062D\0629  \062D\0627\0644\064A\0627\064B' !important;
+  display: block !important;
+  font-size: 11.5px !important;
+  color: #94a3b8 !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+  direction: rtl !important;
+  background: transparent !important;
+}
+
+/* Hide the queue-pill used in the HTML template card */
+.station-card .queue-pill {
+  display: none !important;
+}
