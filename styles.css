@@ -3685,3 +3685,85 @@ legend {
   padding-bottom: 8px !important;
   z-index: 60 !important;
 }
+/* ── 12. Temp: neutral traffic placeholder (until Places API) ─────── */
+/* DESIGN V3 uses specificity (0,3,0) on per-card-type selectors,      */
+/* so we match that here to guarantee we win the !important cascade.   */
+
+/* Strip badge styling — all three card types explicitly named          */
+.station-card.best-station-card .station-card-status,
+.station-card.hero-card .station-card-status,
+.station-card.backup-station-card .station-card-status,
+.station-card.nearby-station-row .station-card-status,
+.station-card.best-station-card .status-pill,
+.station-card.backup-station-card .status-pill,
+.station-card.nearby-station-row .status-pill {
+  font-size: 0 !important;
+  color: transparent !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  display: block !important;
+  line-height: 1 !important;
+  margin-top: 2px !important;
+  margin-bottom: 0 !important;
+  box-shadow: none !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+/* Remove the colored dot pseudo-element on all card types */
+.station-card.best-station-card .station-card-status::before,
+.station-card.hero-card .station-card-status::before,
+.station-card.backup-station-card .station-card-status::before,
+.station-card.nearby-station-row .station-card-status::before,
+.station-card.best-station-card .status-pill::before,
+.station-card.backup-station-card .status-pill::before,
+.station-card.nearby-station-row .status-pill::before {
+  content: none !important;
+  display: none !important;
+}
+
+/* No ::after placeholder — Places API badges handle status display */
+.station-card.best-station-card .station-card-status::after,
+.station-card.hero-card .station-card-status::after,
+.station-card.backup-station-card .station-card-status::after,
+.station-card.nearby-station-row .station-card-status::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Hide the queue-pill used in the HTML template card */
+.station-card .queue-pill {
+  display: none !important;
+}
+
+/* ── 13. Places API real-time status badges ──────────────────── */
+
+.places-status-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px !important;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  direction: rtl;
+  margin-top: 4px;
+  margin-bottom: 2px;
+  line-height: 1.4;
+  gap: 4px;
+}
+
+/* Light background cards (backup, nearby rows) */
+.places-status-open        { background: #dcfce7; color: #15803d; }
+.places-status-closed      { background: #f1f5f9; color: #475569; }
+.places-status-closed-temp { background: #fff7ed; color: #c2410c; }
+.places-status-closed-perm { background: #fee2e2; color: #b91c1c; }
+
+/* Dark hero card — adjust badge colors for dark navy background */
+.best-station-card .places-status-open        { background: rgba(34,197,94,0.18);  color: #86efac; }
+.best-station-card .places-status-closed      { background: rgba(148,163,184,0.15); color: #94a3b8; }
+.best-station-card .places-status-closed-temp { background: rgba(251,146,60,0.18); color: #fdba74; }
+.best-station-card .places-status-closed-perm { background: rgba(239,68,68,0.18);  color: #fca5a5; }
