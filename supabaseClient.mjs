@@ -120,7 +120,10 @@ export function createSupabaseClient({
       });
 
       if (!response.ok) {
-        throw new Error(`Supabase upsert failed: ${response.status}`);
+        const errorBody = await response.text().catch(() => "");
+        throw new Error(
+          `Supabase upsert failed: ${response.status}${errorBody ? ` ${errorBody}` : ""}`,
+        );
       }
 
       return response.json();

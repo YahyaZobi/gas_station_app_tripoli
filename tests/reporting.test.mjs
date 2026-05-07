@@ -6,8 +6,10 @@ import {
   ACTIVITY_LABELS,
   aggregateStation,
   buildStationSections,
+  calculateDecisionConfidenceScore,
   computeStationStatus,
   createReportRecord,
+  DEMO_DECISION_STATIONS,
   findNearestStationWithinDistance,
   formatDistanceLabel,
   formatNumber,
@@ -31,7 +33,13 @@ import {
   minutesSince,
   PRESENCE_PROXIMITY_KM,
   PRESENCE_WINDOW_MINUTES,
+  getBestStationDecision,
+  getDemoStationDecision,
+  predictCrowdStatus,
+  predictStationAvailability,
+  predictStationStatus,
   projectStations,
+  rankStationsForDecision,
   rankStations,
   REPORT_PROXIMITY_KM,
   REPORT_WINDOW_MINUTES,
@@ -41,7 +49,12 @@ import {
   formatRelativeTime,
   summarizeStationPresence,
 } from "../logic.mjs";
-import { getLocationModeConfig, getProtocolWarning } from "../environment-utils.mjs";
+import {
+  getDevLocationOverrideConfig,
+  getDevPanelConfig,
+  getLocationModeConfig,
+  getProtocolWarning,
+} from "../environment-utils.mjs";
 import {
   FAVORITE_STATIONS_STORAGE_KEY,
   isFavoriteStation,
@@ -52,6 +65,7 @@ import {
 import { buildDecisionFirstLayout } from "../home-layout-utils.mjs";
 import { filterStationsForList } from "../list-utils.mjs";
 import { getGoogleMapsUrl, getLeafletMarkerClass } from "../map-utils.mjs";
+import { getGoogleRouteMetrics } from "../route-metrics-utils.mjs";
 import {
   canNotifyStation,
   getStationAvailabilityNotificationMessage,
@@ -71,6 +85,12 @@ import { readStoredReports } from "../report-storage.mjs";
 import { createRepository } from "../repository.mjs";
 import { resolveSelectedStationId } from "../selection-utils.mjs";
 import { createSupabaseClient, getSupabaseConfig } from "../supabaseClient.mjs";
+import {
+  getUsageAnalyticsSummary,
+  readUsageEvents,
+  trackEvent,
+  USAGE_ANALYTICS_STORAGE_KEY,
+} from "../usage-analytics-storage.mjs";
 
 const station = {
   id: "station-1",
@@ -158,7 +178,7 @@ test("no_fuel reports with active devices <= 2 return no_fuel", () => {
   assert.equal(status, "no_fuel");
 });
 
-test("active devices >= 10 return busy even if reports are weak", () => {
+test("long dwell returns busy even if reports are weak", () => {
   const now = new Date("2026-04-24T12:00:00.000Z");
   const status = computeStationStatus({
     reports: [
@@ -171,18 +191,332 @@ test("active devices >= 10 return busy even if reports are weak", () => {
       },
     ],
     activeDevices: 10,
+    averageDwellMinutes: 19,
     now,
   });
 
   assert.equal(status, "busy");
 });
 
-test("presence-driven thresholds map active devices into believable statuses", () => {
-  assert.equal(getPresenceDrivenStatus(0, true), "طابور خفيف");
-  assert.equal(getPresenceDrivenStatus(2, true), "عالبومبة طول");
-  assert.equal(getPresenceDrivenStatus(8, true), "طابور خفيف");
-  assert.equal(getPresenceDrivenStatus(12, true), "زحمة");
-  assert.equal(getPresenceDrivenStatus(0, false), "طابور خفيف");
+test("presence-driven thresholds subtract baseline staff and use dwell and bounce", () => {
+  assert.equal(getPresenceDrivenStatus({ activeDevices: 5, averageDwellMinutes: 6, hasRecentPresenceData: true }), "غير مؤكد");
+  assert.equal(getPresenceDrivenStatus({ activeDevices: 8, averageDwellMinutes: 4, hasRecentPresenceData: true }), "عالبومبة طول");
+  assert.equal(getPresenceDrivenStatus({ activeDevices: 14, averageDwellMinutes: 12, hasRecentPresenceData: true }), "طابور خفيف");
+  assert.equal(getPresenceDrivenStatus({ activeDevices: 18, averageDwellMinutes: 12, hasRecentPresenceData: true }), "زحمة");
+  assert.equal(getPresenceDrivenStatus({ activeDevices: 8, averageDwellMinutes: 2, bounceRate: 0.5, hasRecentPresenceData: true }), "مسكر");
+  assert.equal(getPresenceDrivenStatus({ activeDevices: 0, hasRecentPresenceData: false }), "غير مؤكد");
+});
+
+test("Tripoli crowd forecast treats Sunday as high crowd risk", () => {
+  const forecast = predictCrowdStatus(
+    { status: "available", queueLevel: "short" },
+    new Date("2026-04-26T12:00:00"),
+    {},
+  );
+
+  assert.equal(forecast.predictedStatus, "زحمة");
+  assert.equal(forecast.bestTimeWindow, "بعد 10 صباحاً أو آخر اليوم");
+  assert.match(forecast.warningMessageArabic, /الأحد/);
+});
+
+test("Tripoli crowd forecast treats Thursday as higher crowd risk", () => {
+  const forecast = predictCrowdStatus(
+    { status: "available", queueLevel: "short" },
+    new Date("2026-04-30T12:00:00"),
+    {},
+  );
+
+  assert.equal(forecast.predictedStatus, "زحمة");
+  assert.match(forecast.warningMessageArabic, /الخميس/);
+});
+
+test("Tripoli crowd forecast treats Friday morning as best refuel window", () => {
+  const forecast = predictCrowdStatus(
+    { status: "busy", queueLevel: "long" },
+    new Date("2026-05-01T08:00:00"),
+    {},
+  );
+
+  assert.equal(forecast.predictedStatus, "عالبومبة طول");
+  assert.equal(forecast.bestTimeWindow, "الجمعة صباحاً");
+});
+
+test("Tripoli crowd forecast lowers crowd risk between 6 and 10 AM", () => {
+  const forecast = predictCrowdStatus(
+    { status: "busy", queueLevel: "long" },
+    new Date("2026-04-27T07:30:00"),
+    {},
+  );
+
+  assert.equal(forecast.predictedStatus, "عالبومبة طول");
+  assert.equal(forecast.bestTimeWindow, "من 6 إلى 10 صباحاً");
+});
+
+test("Tripoli crowd forecast shortage mode overrides normal rules", () => {
+  const forecast = predictCrowdStatus(
+    { status: "available", queueLevel: "short" },
+    new Date("2026-05-01T08:00:00"),
+    { shortageMode: true },
+  );
+
+  assert.equal(forecast.predictedStatus, "مسكر");
+  assert.match(forecast.warningMessageArabic, /نقص|طوارئ/);
+});
+
+test("passive station prediction applies Sunday crowd risk", () => {
+  const prediction = predictStationStatus(
+    {
+      activeDevices: 8,
+      averageDwellMinutes: 4,
+      bounceRate: 0,
+      arrivalRate: 3,
+      lastSignalAt: "2026-04-26T08:55:00.000Z",
+    },
+    { dayOfWeek: 0, hourOfDay: 9, now: new Date("2026-04-26T09:00:00.000Z") },
+  );
+
+  assert.equal(prediction.predictedStatus, "زحمة");
+  assert.equal(prediction.confidenceScore, 2);
+});
+
+test("passive station prediction applies Thursday crowd risk", () => {
+  const prediction = predictStationStatus(
+    {
+      activeDevices: 8,
+      averageDwellMinutes: 4,
+      bounceRate: 0,
+      arrivalRate: 3,
+      lastSignalAt: "2026-04-30T11:55:00.000Z",
+    },
+    { dayOfWeek: 4, hourOfDay: 12, now: new Date("2026-04-30T12:00:00.000Z") },
+  );
+
+  assert.equal(prediction.predictedStatus, "زحمة");
+});
+
+test("passive station prediction treats Friday morning as low crowd", () => {
+  const prediction = predictStationStatus(
+    {
+      activeDevices: 18,
+      averageDwellMinutes: 7,
+      bounceRate: 0,
+      arrivalRate: 4,
+      lastSignalAt: "2026-05-01T07:55:00.000Z",
+    },
+    { dayOfWeek: 5, hourOfDay: 8, now: new Date("2026-05-01T08:00:00.000Z") },
+  );
+
+  assert.equal(prediction.predictedStatus, "عالبومبة طول");
+});
+
+test("passive station prediction marks high dwell as crowded", () => {
+  const prediction = predictStationStatus(
+    {
+      activeDevices: 8,
+      averageDwellMinutes: 19,
+      bounceRate: 0,
+      arrivalRate: 2,
+      lastSignalAt: "2026-04-27T12:55:00.000Z",
+    },
+    { dayOfWeek: 1, hourOfDay: 13, now: new Date("2026-04-27T13:00:00.000Z") },
+  );
+
+  assert.equal(prediction.predictedStatus, "زحمة");
+});
+
+test("passive station prediction marks high bounce as closed", () => {
+  const prediction = predictStationStatus(
+    {
+      activeDevices: 8,
+      averageDwellMinutes: 2,
+      bounceRate: 0.5,
+      arrivalRate: 3,
+      lastSignalAt: "2026-04-27T12:55:00.000Z",
+    },
+    { dayOfWeek: 1, hourOfDay: 13, now: new Date("2026-04-27T13:00:00.000Z") },
+  );
+
+  assert.equal(prediction.predictedStatus, "مسكر");
+});
+
+test("passive station prediction marks low activity and short dwell as direct pump", () => {
+  const prediction = predictStationStatus(
+    {
+      activeDevices: 8,
+      averageDwellMinutes: 4,
+      bounceRate: 0,
+      arrivalRate: 1,
+      lastSignalAt: "2026-04-27T12:55:00.000Z",
+    },
+    { dayOfWeek: 1, hourOfDay: 13, now: new Date("2026-04-27T13:00:00.000Z") },
+  );
+
+  assert.equal(prediction.predictedStatus, "عالبومبة طول");
+});
+
+test("decision prediction follows Tripoli day and time patterns", () => {
+  assert.equal(
+    predictStationAvailability(
+      { id: "sunday", status: "unknown" },
+      { dayOfWeek: 0, hourOfDay: 13, now: new Date("2026-04-26T13:00:00.000Z") },
+    ).status,
+    "crowded",
+  );
+  assert.equal(
+    predictStationAvailability(
+      { id: "friday", status: "unknown" },
+      { dayOfWeek: 5, hourOfDay: 8, now: new Date("2026-05-01T08:00:00.000Z") },
+    ).status,
+    "available",
+  );
+  assert.equal(
+    predictStationAvailability(
+      { id: "closed", status: "no_fuel", lastSignalAt: "2026-04-27T07:55:00.000Z" },
+      { dayOfWeek: 1, hourOfDay: 8, now: new Date("2026-04-27T08:00:00.000Z") },
+    ).status,
+    "noFuel",
+  );
+});
+
+test("decision confidence score uses freshness, activity, source, patterns, and emergency mode", () => {
+  const now = new Date("2026-04-27T08:00:00.000Z");
+  const highConfidence = calculateDecisionConfidenceScore(
+    {
+      activeDevices: 6,
+      recentSignalsCount: 4,
+      lastSignalAt: "2026-04-27T07:58:00.000Z",
+      statusSource: "confirmed",
+    },
+    {
+      now,
+      dayOfWeek: 1,
+      hourOfDay: 8,
+      prediction: { status: "available", source: "confirmed" },
+    },
+  );
+  const emergencyConfidence = calculateDecisionConfidenceScore(
+    {
+      activeDevices: 0,
+      recentSignalsCount: 0,
+      lastSignalAt: "2026-04-27T06:30:00.000Z",
+    },
+    {
+      now,
+      dayOfWeek: 1,
+      hourOfDay: 8,
+      emergencyMode: true,
+      prediction: { status: "unknown", source: "predicted" },
+    },
+  );
+
+  assert.equal(highConfidence, 90);
+  assert.ok(emergencyConfidence < highConfidence);
+  assert.ok(emergencyConfidence >= 0);
+});
+
+test("decision ranking returns best station output with Arabic reason and arrival estimate", () => {
+  const now = new Date("2026-04-27T08:00:00.000Z");
+  const decision = getBestStationDecision(
+    [
+      {
+        id: "near-crowded",
+        name: "محطة قريبة مزدحمة",
+        distanceKm: 0.2,
+        status: "busy",
+        queueLevel: "long",
+        activeDevices: 18,
+        averageDwellMinutes: 22,
+        lastSignalAt: "2026-04-27T07:58:00.000Z",
+        recentSignalsCount: 6,
+      },
+      {
+        id: "best",
+        name: "محطة مناسبة",
+        distanceKm: 1,
+        status: "available",
+        queueLevel: "short",
+        activeDevices: 5,
+        lastSignalAt: "2026-04-27T07:57:00.000Z",
+        recentSignalsCount: 4,
+        statusSource: "confirmed",
+      },
+      {
+        id: "closed",
+        name: "محطة مغلقة",
+        distanceKm: 0.1,
+        status: "no_fuel",
+        lastSignalAt: "2026-04-27T07:56:00.000Z",
+        recentSignalsCount: 2,
+      },
+    ],
+    { now, dayOfWeek: 1, hourOfDay: 8 },
+  );
+
+  assert.equal(decision.bestStation.id, "best");
+  assert.equal(decision.status, "available");
+  assert.equal(decision.distanceKm, 1);
+  assert.equal(decision.estimatedArrivalMinutes, 6);
+  assert.match(decision.reasonText, /أفضل خيار حالياً/);
+  assert.ok(decision.confidenceScore > 0);
+});
+
+test("decision ranking demo data is immediately runnable", () => {
+  const demoDecision = getDemoStationDecision({
+    now: new Date("2026-04-27T08:00:00.000Z"),
+  });
+  const ranked = rankStationsForDecision(DEMO_DECISION_STATIONS, {
+    now: new Date("2026-04-27T08:00:00.000Z"),
+    dayOfWeek: 1,
+    hourOfDay: 8,
+  });
+
+  assert.ok(DEMO_DECISION_STATIONS.length >= 3);
+  assert.ok(demoDecision.bestStation);
+  assert.equal(ranked.rankedStations[0].id, demoDecision.bestStation.id);
+});
+
+test("decision ranking recalculates distance from user coordinates when available", () => {
+  const now = new Date("2026-04-27T08:00:00.000Z");
+  const decision = getBestStationDecision(
+    [
+      {
+        id: "stale-distance",
+        name: "محطة بعيدة بقيمة قديمة",
+        latitude: 32.9028,
+        longitude: 13.3354,
+        distanceKm: 0.1,
+        status: "available",
+        queueLevel: "short",
+        activeDevices: 5,
+        lastSignalAt: "2026-04-27T07:58:00.000Z",
+        recentSignalsCount: 3,
+      },
+      {
+        id: "coordinate-near",
+        name: "محطة قريبة بالإحداثيات",
+        latitude: 32.8872,
+        longitude: 13.1913,
+        distanceKm: 99,
+        status: "available",
+        queueLevel: "short",
+        activeDevices: 5,
+        lastSignalAt: "2026-04-27T07:58:00.000Z",
+        recentSignalsCount: 3,
+      },
+    ],
+    {
+      now,
+      dayOfWeek: 1,
+      hourOfDay: 8,
+      userLocation: {
+        latitude: 32.8872,
+        longitude: 13.1913,
+      },
+    },
+  );
+
+  assert.equal(decision.bestStation.id, "coordinate-near");
+  assert.ok(decision.bestStation.distanceKm < 0.01);
 });
 
 test("aggregateStation uses passive presence and reports together for busy stations", () => {
@@ -205,21 +539,22 @@ test("aggregateStation uses passive presence and reports together for busy stati
   ];
 
   const result = projectStations([station], reports, { latitude: 32.88, longitude: 13.19 }, [
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 2 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 3 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 4 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 2 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 3 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 2 * 60000).toISOString() },
-    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString() },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 2 * 60000).toISOString(), dwellMinutes: 20 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString(), dwellMinutes: 21 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 3 * 60000).toISOString(), dwellMinutes: 19 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 4 * 60000).toISOString(), dwellMinutes: 22 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString(), dwellMinutes: 20 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 2 * 60000).toISOString(), dwellMinutes: 19 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString(), dwellMinutes: 21 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 3 * 60000).toISOString(), dwellMinutes: 20 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 2 * 60000).toISOString(), dwellMinutes: 21 },
+    { stationId: "station-1", lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString(), dwellMinutes: 20 },
   ], now)[0];
 
   assert.equal(result.status, "busy");
   assert.equal(result.queueLevel, "long");
   assert.equal(result.activeDevices, 10);
+  assert.ok(result.averageDwellMinutes > 18);
 });
 
 test("newer reports have more weight than older reports within the 60 minute window", () => {
@@ -297,8 +632,8 @@ test("recent presence signal updates lastUpdated and trust fields", () => {
   assert.equal(result.activeDevices, 2);
   assert.equal(result.activityLabel, "طابور خفيف");
   assert.equal(result.hasFreshSignal, true);
-  assert.equal(result.status, "available");
-  assert.equal(getDisplayStatus(result), "عالبومبة طول");
+  assert.equal(result.status, "unknown");
+  assert.equal(getDisplayStatus(result), "طابور خفيف");
 });
 
 test("recent report updates lastUpdated when newer than presence", () => {
@@ -353,26 +688,28 @@ test("confidence summary follows active device, signal count, and freshness rule
   );
 });
 
-test("station summaries expose confidence level and Arabic label", () => {
+test("station summaries expose passive prediction and confidence fields", () => {
   const now = new Date("2026-04-24T12:00:00.000Z");
   const result = projectStations(
     [station],
-    [
-      {
-        id: "recent-report",
-        stationId: "station-1",
-        status: "available",
-        queueLevel: "short",
-        createdAt: "2026-04-24T11:59:00.000Z",
-      },
-    ],
-    { latitude: 32.88, longitude: 13.19 },
     [],
+    { latitude: 32.88, longitude: 13.19 },
+    [
+      { stationId: "station-1", lastSeenAt: "2026-04-24T11:59:00.000Z", dwellMinutes: 4 },
+      { stationId: "station-1", lastSeenAt: "2026-04-24T11:58:00.000Z", dwellMinutes: 5 },
+      { stationId: "station-1", lastSeenAt: "2026-04-24T11:57:00.000Z", dwellMinutes: 4 },
+      { stationId: "station-1", lastSeenAt: "2026-04-24T11:56:00.000Z", dwellMinutes: 5 },
+      { stationId: "station-1", lastSeenAt: "2026-04-24T11:55:00.000Z", dwellMinutes: 4 },
+    ],
     now,
   )[0];
 
-  assert.equal(result.confidenceLevel, "medium");
-  assert.equal(result.confidenceLabelArabic, "ثقة متوسطة");
+  assert.equal(result.predictedStatus, "طابور خفيف");
+  assert.equal(result.predicted_status, "طابور خفيف");
+  assert.equal(result.arrivalRate, 5);
+  assert.equal(result.confidenceScore, 2);
+  assert.equal(result.confidenceLevel, "high");
+  assert.equal(result.confidenceLabelArabic, "ثقة عالية");
 });
 
 test("includes a marker color for every station status used by the map", () => {
@@ -478,6 +815,35 @@ test("favorite stations toggle locally with max ten saved", () => {
   assert.match(storage.getItem(FAVORITE_STATIONS_STORAGE_KEY), /station-10/);
 });
 
+test("usage analytics track local events and summarize account activity", () => {
+  const storage = createMemoryStorage();
+  const now = new Date("2026-04-24T12:00:00.000Z");
+
+  trackEvent("app_open", {}, { now, storage });
+  trackEvent(
+    "station_opened_google_maps",
+    { stationId: "station-1", stationName: "محطة السياحي" },
+    { now, storage },
+  );
+  trackEvent("search_used", {}, { now, storage });
+  trackEvent("favorite_added", { station_id: "station-1", station_name: "محطة السياحي" }, { now, storage });
+  trackEvent("favorite_removed", { stationId: "station-1", stationName: "محطة السياحي" }, { now, storage });
+  trackEvent("tab_changed", { tabName: "account" }, { now, storage });
+
+  const usageEvents = readUsageEvents(storage);
+  const summary = getUsageAnalyticsSummary(storage);
+
+  assert.equal(usageEvents.length, 6);
+  assert.equal(usageEvents[0].event_name, "tab_changed");
+  assert.equal(usageEvents[0].tab_name, "account");
+  const stationOpenEvent = usageEvents.find((event) => event.event_name === "station_opened_google_maps");
+  assert.equal(stationOpenEvent.station_id, "station-1");
+  assert.equal(stationOpenEvent.station_name, "محطة السياحي");
+  assert.equal(summary.stationOpenCount, 1);
+  assert.equal(summary.searchUsedCount, 1);
+  assert.match(storage.getItem(USAGE_ANALYTICS_STORAGE_KEY), /station_opened_google_maps/);
+});
+
 test("notifyUser falls back to toast when browser notifications are unavailable", () => {
   const toastMessages = [];
   const channel = notifyUser(
@@ -578,6 +944,63 @@ test("fake location mode is disabled when coordinates are invalid", () => {
   });
 });
 
+test("developer location override reads runtime config and validates coordinates", () => {
+  assert.deepEqual(
+    getDevLocationOverrideConfig(
+      {},
+      {
+        BENZINA_CONFIG: {
+          DEV_LOCATION_OVERRIDE: {
+            enabled: true,
+            latitude: 32.9028,
+            longitude: 13.3354,
+          },
+        },
+      },
+    ),
+    {
+      enabled: true,
+      hasValidLocation: true,
+      latitude: 32.9028,
+      longitude: 13.3354,
+    },
+  );
+
+  assert.deepEqual(
+    getDevLocationOverrideConfig(
+      {},
+      {
+        BENZINA_CONFIG: {
+          DEV_LOCATION_OVERRIDE_ENABLED: "true",
+          DEV_LOCATION_OVERRIDE_LATITUDE: "",
+          DEV_LOCATION_OVERRIDE_LONGITUDE: "13.3354",
+        },
+      },
+    ),
+    {
+      enabled: true,
+      hasValidLocation: false,
+      latitude: null,
+      longitude: 13.3354,
+    },
+  );
+});
+
+test("developer prediction panel is enabled only through runtime config", () => {
+  assert.deepEqual(getDevPanelConfig({}, {}), { enableDevPanel: false });
+  assert.deepEqual(
+    getDevPanelConfig(
+      {},
+      {
+        BENZINA_CONFIG: {
+          ENABLE_DEV_PANEL: "true",
+        },
+      },
+    ),
+    { enableDevPanel: true },
+  );
+});
+
 test("supabase client logs config status without exposing keys", () => {
   const logger = createMemoryLogger();
 
@@ -593,6 +1016,26 @@ test("supabase client logs config status without exposing keys", () => {
   assert.equal(logger.infoMessages.length, 1);
   assert.match(logger.infoMessages[0], /Config detected: yes/);
   assert.doesNotMatch(logger.infoMessages[0], /super-secret-anon-key/);
+});
+
+test("supabase upsert errors include response body for debugging RLS failures", async () => {
+  const client = createSupabaseClient({
+    config: {
+      url: "https://demo.supabase.co",
+      anonKey: "anon-key",
+    },
+    fetchImpl: async () => ({
+      ok: false,
+      status: 403,
+      text: async () => '{"message":"new row violates row-level security policy"}',
+    }),
+    logger: createMemoryLogger(),
+  });
+
+  await assert.rejects(
+    client.upsert("station_presence", { station_id: "station-1" }),
+    /Supabase upsert failed: 403.*row-level security policy/,
+  );
 });
 
 test("supabase realtime subscription receives report insert events", () => {
@@ -757,7 +1200,7 @@ test("station sections prioritize top available stations and keep crowded or clo
 
   assert.equal(sections.bestStation?.id, "1");
   assert.equal(sections.backupStation?.id, "2");
-  assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["3", "4", "5"]);
+  assert.deepEqual(sections.recommendedStations.map((station) => station.id), ["4", "3", "5"]);
   assert.deepEqual(sections.nearbyStations.map((station) => station.id), []);
   assert.deepEqual(sections.avoidStations.map((station) => station.id), []);
 });
@@ -1019,14 +1462,16 @@ test("repository reads and writes through supabase while keeping local fallback 
     supabaseClient: {
       isConfigured: true,
       async select(path) {
-        if (path === "stations") {
+        if (path === "station_predictions") {
           return [
             {
-              id: "station-db-1",
+              station_id: "station-db-1",
               name: "محطة من Supabase",
               latitude: 32.881,
               longitude: 13.2,
-              is_active: true,
+              fuel_status: "available",
+              crowd_level: "light",
+              confidence_score: 0.86,
             },
           ];
         }
@@ -1069,12 +1514,15 @@ test("repository reads and writes through supabase while keeping local fallback 
       name: "محطة من Supabase",
       latitude: 32.881,
       longitude: 13.2,
+      fuelStatus: "available",
+      crowdLevel: "light",
+      confidenceScore: 0.86,
     },
   ]);
   assert.equal(reportsResult.length, 1);
   assert.equal(reportsResult[0].id, "report-remote-1");
   assert.match(storage.getItem("benzina_reports"), /report-remote-1/);
-  assert.match(logger.infoMessages.join("\n"), /Stations fetch succeeded\. Count: 1/);
+  assert.match(logger.infoMessages.join("\n"), /Prediction fetch succeeded\. Count: 1/);
   assert.match(logger.infoMessages.join("\n"), /Reports fetch succeeded\. Remote count: 1\. Total active count: 1/);
   assert.match(logger.infoMessages.join("\n"), /Report submit succeeded in Supabase/);
 });
@@ -1129,8 +1577,52 @@ test("repository loads and saves passive station presence through supabase", asy
   assert.equal(upsertCalls.length, 1);
   assert.equal(upsertCalls[0].path, "station_presence");
   assert.deepEqual(upsertCalls[0].onConflictColumns, ["station_id", "device_id"]);
+  assert.deepEqual(upsertCalls[0].payload, {
+    station_id: "station-1",
+    device_id: "device-1",
+    latitude: 32.88,
+    longitude: 13.19,
+    distance_to_station_meters: 88,
+    last_seen_at: now.toISOString(),
+  });
   assert.match(logger.infoMessages.join("\n"), /Presence fetch succeeded\. Active rows: 1/);
   assert.match(logger.infoMessages.join("\n"), /Presence heartbeat saved/);
+});
+
+test("repository returns detailed passive presence heartbeat failures for dev diagnostics", async () => {
+  const now = new Date("2026-04-24T12:00:00.000Z");
+  const repository = createRepository({
+    nowFactory: () => now,
+    logger: createMemoryLogger(),
+    supabaseClient: {
+      isConfigured: true,
+      async select() {
+        return [];
+      },
+      async upsert() {
+        throw new Error("new row violates row-level security policy");
+      },
+    },
+  });
+
+  const result = await repository.submitPresenceHeartbeat(
+    {
+      stationId: "station-1",
+      deviceId: "device-1",
+      latitude: 32.88,
+      longitude: 13.19,
+      distanceToStationMeters: 88,
+      lastSeenAt: now.toISOString(),
+    },
+    { detailedResult: true },
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /row-level security policy/);
+  assert.equal(result.payload.station_id, "station-1");
+  assert.equal(result.payload.device_id, "device-1");
+  assert.equal(result.payload.distance_to_station_meters, 88);
+  assert.equal(result.payload.last_seen_at, now.toISOString());
 });
 
 test("repository forwards realtime inserts when supabase realtime is available", () => {
@@ -1225,6 +1717,35 @@ test("presence rows older than the 5 minute window are ignored", () => {
   assert.equal(counts.get("station-1")?.lastSeenAt, new Date(now.getTime() - (PRESENCE_WINDOW_MINUTES - 1) * 60000).toISOString());
 });
 
+test("presence summary calculates average dwell and bounce rate from active devices", () => {
+  const now = new Date("2026-04-24T12:00:00.000Z");
+  const counts = summarizeStationPresence(
+    [
+      {
+        stationId: "station-1",
+        lastSeenAt: new Date(now.getTime() - 1 * 60000).toISOString(),
+        dwellMinutes: 2,
+      },
+      {
+        stationId: "station-1",
+        lastSeenAt: new Date(now.getTime() - 2 * 60000).toISOString(),
+        dwellMinutes: 10,
+      },
+      {
+        stationId: "station-1",
+        lastSeenAt: new Date(now.getTime() - 3 * 60000).toISOString(),
+        firstSeenAt: new Date(now.getTime() - 15 * 60000).toISOString(),
+      },
+    ],
+    now,
+  );
+
+  assert.equal(counts.get("station-1")?.activeDevices, 3);
+  assert.equal(counts.get("station-1")?.averageDwellMinutes, 8);
+  assert.equal(counts.get("station-1")?.bounceRate, 1 / 3);
+  assert.equal(counts.get("station-1")?.arrivalRate, 3);
+});
+
 test("presence heartbeat targets the nearest station within 200 meters", () => {
   const nearest = findNearestStationWithinDistance(
     { latitude: 32.88, longitude: 13.19 },
@@ -1249,7 +1770,7 @@ test("presence heartbeat returns null when no station is close enough", () => {
   assert.equal(nearest, null);
 });
 
-test("a new in-memory report changes station status immediately while stale reports are ignored", () => {
+test("manual reports are counted but passive signals remain primary for status", () => {
   const now = new Date("2026-04-24T12:00:00.000Z");
   const stations = [station];
   const userLocation = { latitude: 32.88, longitude: 13.19 };
@@ -1272,16 +1793,16 @@ test("a new in-memory report changes station status immediately while stale repo
 
   const result = projectStations(stations, reports, userLocation, now)[0];
 
-  assert.equal(result.status, "available");
-  assert.equal(result.queueLevel, "short");
+  assert.equal(result.status, "unknown");
+  assert.equal(result.queueLevel, "unknown");
   assert.equal(result.recentReportsCount, 1);
 });
 
 test("stations are sorted by nearest first using the active user location", () => {
   const now = new Date("2026-04-24T12:00:00.000Z");
   const stations = [
-    { id: "far", name: "Far", latitude: 32.95, longitude: 13.3 },
-    { id: "near", name: "Near", latitude: 32.8805, longitude: 13.1915 },
+    { id: "far", name: "Far", latitude: 32.95, longitude: 13.3, distanceKm: 0.1, etaMinutes: 1 },
+    { id: "near", name: "Near", latitude: 32.8805, longitude: 13.1915, distanceKm: 99, etaMinutes: 99 },
   ];
   const userLocation = { latitude: 32.88, longitude: 13.19 };
 
@@ -1289,6 +1810,34 @@ test("stations are sorted by nearest first using the active user location", () =
 
   assert.equal(result[0].id, "near");
   assert.equal(result[1].id, "far");
+  assert.ok(result[0].distanceKm < 0.2);
+  assert.equal(result[0].etaMinutes, null);
+  assert.equal(result[0].routeSource, "coordinate_projection");
+});
+
+test("route metrics fallback recalculates distance and ETA from coordinates", async () => {
+  const [metric] = await getGoogleRouteMetrics(
+    { latitude: 32.88, longitude: 13.19 },
+    [
+      {
+        id: "near",
+        name: "Near",
+        latitude: 32.8805,
+        longitude: 13.1915,
+        distanceKm: 99,
+        etaMinutes: 99,
+      },
+    ],
+    {
+      runtimeEnv: {},
+      browserConfig: {},
+    },
+  );
+
+  assert.equal(metric.stationId, "near");
+  assert.ok(metric.distanceKm < 0.2);
+  assert.ok(metric.etaMinutes >= 2);
+  assert.equal(metric.routeSource, "fallback");
 });
 
 test("createReportRecord keeps the selected station coordinates for modal submissions", () => {
@@ -1463,7 +2012,6 @@ test("home screen and search tab keep clear separated copy", () => {
   assert.match(html, /placeholder="ابحث عن محطة أو منطقة"/);
   assert.match(html, /ابحث باسم المحطة أو المنطقة/);
   assert.match(source, /listEmpty\.textContent = "لا توجد نتائج مطابقة"/);
-  assert.match(html, /id="home-info-notice"/);
   assert.match(html, /<nav class="bottom-nav"/);
   assert.match(html, /class="nav-indicator"/);
   assert.match(html, /data-tab="account"/);
@@ -1473,21 +2021,73 @@ test("home screen and search tab keep clear separated copy", () => {
   assert.match(html, /data-tab="home"/);
   assert.match(html, /data-tab="search"/);
   assert.match(source, /state\.activeTab === "search"/);
-  assert.match(source, /const discoveryBaseStations = isSearchTab \? projectedStations : nearbyBaseStations/);
+  assert.match(source, /const isMapTab = state\.activeTab === "search"/);
+  assert.match(source, /const discoveryBaseStations = nearbyBaseStations/);
   assert.match(source, /sortStationsForSearch\(/);
-  assert.match(source, /screenTitle\.textContent = isAccountTab \? "حسابي" : isSearchTab \? "البحث" : "أقرب المحطات"/);
-  assert.match(source, /listPanelHeading\.classList\.toggle\("hidden", !isSearchTab && !isAccountTab\)/);
-  assert.match(source, /homeInfoNotice\.classList\.toggle\("hidden", isSearchTab \|\| isAccountTab\)/);
+  assert.match(source, /screenTitle\.textContent = isAccountTab \? "حسابي" : isMapTab \? "الخريطة" : "أقرب المحطات"/);
+  assert.match(source, /listPanelHeading\.classList\.toggle\("hidden", isHomeTab\)/);
+  assert.match(source, /homeInfoNotice\?\.classList\.toggle\("hidden", !isHomeTab\)/);
   assert.match(source, /state\.activeTab === "account"/);
   assert.match(source, /bottomNav\.dataset\.activeTab = state\.activeTab/);
   assert.match(source, /موقعي/);
   assert.match(source, /نستخدم موقعك لعرض أقرب المحطات فقط/);
   assert.match(source, /لا توجد محطات محفوظة/);
   assert.match(source, /createFavoriteStationsCard/);
+  assert.match(source, /نشاطك/);
+  assert.match(source, /عدد المحطات التي فتحتها/);
+  assert.match(source, /عدد عمليات البحث/);
+  assert.match(source, /عدد المحطات المحفوظة/);
   assert.match(source, /شيل يساعدك تعرف أقرب محطة مناسبة قبل ما تمشي/);
   assert.match(source, /لا نعرض موقعك لأي مستخدم آخر/);
   assert.match(source, /state\.discoveryRadiusKm = EXPANDED_DISCOVERY_RADIUS_KM/);
   assert.match(source, /distanceKm <= nearbyRadiusKm/);
+});
+
+test("app renders from enriched station data only", () => {
+  const source = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /const enrichedStations = buildEnrichedStations\(/);
+  assert.match(source, /latestEnrichedStations = enrichedStations/);
+  assert.match(source, /logEnrichedStationsTable\(enrichedStations\)/);
+  assert.match(source, /assertEnrichedStations\(enrichedStations, "render"\)/);
+  assert.match(source, /__isEnrichedStation: true/);
+  assert.match(source, /score,/);
+  assert.doesNotMatch(source, /latestProjectedStations/);
+  assert.doesNotMatch(source, /stations\.find\(\(item\) => item\.id === stationId\)/);
+});
+
+test("developer prediction panel is config gated and uses prediction outputs", () => {
+  const source = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const config = fs.readFileSync(new URL("../config.js", import.meta.url), "utf8");
+
+  assert.match(config, /ENABLE_DEV_PANEL: false/);
+  assert.match(source, /getDevPanelConfig\(\)\.enableDevPanel/);
+  assert.match(source, /predictStationStatus\(/);
+  assert.match(source, /data-dev-output="predictedStatus"/);
+  assert.match(source, /data-dev-output="confidence"/);
+  assert.match(source, /data-dev-health="deviceId"/);
+  assert.match(source, /data-dev-health="nearestStation"/);
+  assert.match(source, /data-dev-health="nearestDistance"/);
+  assert.match(source, /data-dev-health="lastHeartbeat"/);
+  assert.match(source, /data-dev-health="heartbeatStatus"/);
+  assert.match(source, /data-dev-health="heartbeatError"/);
+  assert.match(source, /logDevPresence\("location source"/);
+  assert.match(source, /logDevPresence\("location fetched"/);
+  assert.match(source, /logDevPresence\("nearest station"/);
+  assert.match(source, /logDevPresence\("heartbeat payload"/);
+  assert.match(source, /logDevPresence\("heartbeat sent"/);
+  assert.match(source, /logDevPresence\("heartbeat response"/);
+  assert.match(source, /logDevPresence\("heartbeat failed reason"/);
+  assert.match(source, /station_presence/);
+  assert.match(source, /distance_to_station_meters/);
+  assert.match(source, /الأجهزة النشطة/);
+  assert.match(source, /متوسط البقاء بالدقائق/);
+  assert.match(source, /معدل الخروج السريع/);
+  assert.match(source, /فحص إشارات الحضور/);
+  assert.match(source, /خطأ Supabase/);
+  assert.match(css, /\.dev-prediction-panel \{/);
+  assert.match(css, /\.dev-signal-health \{/);
 });
 
 test("app hides the best-station section entirely when no reliable hero exists", () => {
@@ -1516,30 +2116,23 @@ test("styles keep a premium hero card and full-width primary action", () => {
   assert.match(css, /width: 100%;\n\s+min-height: 54px;/);
 });
 
-test("bottom navigation uses a dark premium bar with a green active pill", () => {
+test("bottom navigation keeps the existing Cursor-created visual styling", () => {
   const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
   assert.match(css, /\.bottom-nav \{/);
   assert.match(css, /position: absolute;/);
-  assert.match(css, /bottom: 14px;/);
+  assert.match(css, /bottom: 16px;/);
   assert.match(css, /left: 16px;/);
   assert.match(css, /right: 16px;/);
   assert.match(css, /height: 72px;/);
   assert.match(css, /grid-template-columns: repeat\(3, 1fr\);/);
-  assert.match(css, /border-radius: 999px;/);
-  assert.match(css, /background: #0f172a;/);
+  assert.match(css, /border-radius: 28px;/);
+  assert.match(css, /background: #1f2a37;/);
   assert.match(css, /\.app-content \{/);
   assert.match(css, /overflow-y: auto;/);
   assert.match(css, /padding: 52px 16px 112px;/);
   assert.match(css, /\.nav-indicator \{/);
-  assert.match(css, /width: calc\(\(100% - 24px\) \/ 3\);/);
-  assert.match(css, /background: linear-gradient\(135deg, #16a34a, #2fa84f\);/);
-  assert.match(css, /transition: left 220ms ease;/);
-  assert.match(css, /\.bottom-nav\[data-active-tab="account"\] \.nav-indicator \{/);
-  assert.match(css, /\.bottom-nav\[data-active-tab="home"\] \.nav-indicator \{/);
-  assert.match(css, /left: calc\(33\.333% \+ 4px\);/);
-  assert.match(css, /\.bottom-nav\[data-active-tab="search"\] \.nav-indicator \{/);
-  assert.match(css, /left: calc\(66\.666% \+ 0px\);/);
+  assert.match(css, /display: none;/);
   assert.match(css, /\.nav-item \{/);
   assert.match(css, /\.nav-item\.active \{/);
   assert.match(css, /\.nav-label \{/);

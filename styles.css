@@ -1,24 +1,110 @@
 :root {
-  --bg: #f5f7fa;
-  --bg-deep: #eef4f0;
+  --shell-max-width: 430px;
+  --bottom-nav-height: 72px;
+  --bottom-nav-offset: 14px;
+  --app-bg: #f8fafc;
+  --header-bg: #f8fafc;
+  --body-atmosphere: radial-gradient(circle at 20% 10%, rgba(14, 122, 50, 0.08), transparent 40%),
+    radial-gradient(circle at 80% 90%, rgba(245, 201, 58, 0.08), transparent 40%), #eef2f0;
+  --bg: #f8fafc;
+  --bg-deep: #eef2f0;
   --surface: #ffffff;
-  --surface-soft: #fafcfa;
-  --surface-strong: #eef7f0;
-  --ink: #1f2a37;
-  --muted: #6b7280;
-  --line: rgba(31, 42, 55, 0.08);
-  --green: #2fa84f;
-  --green-strong: #1e7a3a;
-  --yellow: #f59e0b;
-  --yellow-strong: #facc15;
-  --red: #ef4444;
-  --red-strong: #991b1b;
-  --gray: #9ca3af;
-  --teal: #1e7a3a;
-  --teal-deep: #1f2a37;
-  --navy: #1f2a37;
-  --shadow-soft: 0 18px 38px rgba(24, 36, 51, 0.08);
-  --shadow-strong: 0 26px 60px rgba(24, 36, 51, 0.18);
+  --surface-soft: #f1f5f9;
+  --surface-strong: #e2e8f0;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --border-subtle: #e2e8f0;
+  --green: #22c55e;
+  --green-strong: #15803d;
+  --green-soft: #dcfce7;
+  --yellow: #f6c343;
+  --yellow-strong: #a16207;
+  --red: #e6373d;
+  --red-strong: #b91c1c;
+  --gray: #94a3b8;
+  --teal: #16a34a;
+  --teal-deep: #0f172a;
+  --navy: #0f172a;
+  --hero-bg: #0f172a;
+  --hero-panel: #1e293b;
+  --hero-accent: #22c55e;
+  --hero-accent-ink: #0a3a1c;
+  --nav-bar-bg: #ffffff;
+  --nav-active-bg: #0f172a;
+  --nav-active-fg: #ffffff;
+  --nav-inactive-fg: #334155;
+  --shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-strong: 0 18px 38px rgba(15, 23, 42, 0.12);
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+  --dur-fast: 180ms;
+  --dur-med: 240ms;
+}
+
+@keyframes shaleFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shaleSlideUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes shaleHeroIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes shaleRowIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes shalePulseGlow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell,
+  .app-shell *,
+  .modal-backdrop,
+  .report-modal,
+  .bottom-nav {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 * {
@@ -26,7 +112,7 @@
 }
 
 html {
-  background: linear-gradient(180deg, #eef7f0 0%, #dbeadd 100%);
+  background: var(--body-atmosphere);
 }
 
 body {
@@ -36,11 +122,12 @@ body {
   text-align: right;
   font-family: "Cairo", sans-serif;
   color: var(--ink);
-  background:
-    radial-gradient(circle at top left, rgba(47, 168, 79, 0.08), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(30, 122, 58, 0.1), transparent 30%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.22), transparent 34%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+  background: var(--body-atmosphere);
+  transition: background 0.3s var(--ease-out);
+}
+
+body.theme-calm {
+  background: var(--body-atmosphere);
 }
 
 body.modal-open {
@@ -103,7 +190,7 @@ body.modal-open {
   height: 100%;
   overflow: hidden;
   border-radius: 40px;
-  background: linear-gradient(180deg, #f9fafb 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 52%);
 }
 
 button,
@@ -119,17 +206,22 @@ button {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
   background:
-    radial-gradient(circle at 50% 0%, rgba(22, 138, 58, 0.1), transparent 35%),
-    radial-gradient(circle at 10% 100%, rgba(245, 158, 11, 0.08), transparent 22%);
+    radial-gradient(circle at 50% 0%, rgba(34, 197, 94, 0.09), transparent 38%),
+    radial-gradient(circle at 10% 100%, rgba(245, 201, 58, 0.07), transparent 26%);
 }
 
 .app-shell {
   position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  width: 100%;
+  max-width: var(--shell-max-width);
+  margin-inline: auto;
   width: 100%;
   height: 100%;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(234, 245, 236, 0.12));
+  background: var(--app-bg);
 }
 
 .app-content {
@@ -388,6 +480,51 @@ h2 {
   height: 100%;
   min-height: 270px;
   display: block;
+}
+
+.map-station-sheet {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(31, 42, 55, 0.08);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  text-align: right;
+}
+
+.map-station-sheet-title {
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.4;
+  color: #1f2a37;
+}
+
+.map-station-sheet-meta,
+.map-station-sheet-status {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.map-station-sheet-status {
+  font-weight: 700;
+  color: #1e7a3a;
+}
+
+.map-station-sheet-action {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #16a34a;
+  color: #ffffff;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .station-map.leaflet-container {
@@ -730,14 +867,16 @@ legend {
 
 .primary-button {
   border: 0;
-  border-radius: 18px;
+  border-radius: 16px;
   padding: 15px 18px;
-  background: linear-gradient(135deg, #2fb344, #168a3a);
+  background: linear-gradient(135deg, #22c55e, #15803d);
   color: #ffffff;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 14px 24px rgba(22, 138, 58, 0.24);
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  box-shadow: 0 12px 28px rgba(34, 197, 94, 0.28);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 
 .primary-button:disabled {
@@ -791,7 +930,7 @@ legend {
 }
 
 .station-group-link {
-  color: var(--green-strong);
+  color: #ca8a04;
   font-size: 0.95rem;
   font-weight: 800;
 }
@@ -1518,6 +1657,36 @@ legend {
   font-weight: 600;
 }
 
+.station-card-forecast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.station-card-forecast span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.station-card-forecast strong {
+  font-weight: 900;
+}
+
+.best-station-forecast {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.backup-station-forecast,
+.nearby-station-forecast {
+  color: #6b7280;
+  margin-bottom: 0;
+}
+
 .station-card-meta-separator {
   opacity: 0.7;
 }
@@ -2010,6 +2179,149 @@ legend {
   color: var(--green-strong);
 }
 
+.account-activity-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-activity-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.account-activity-list strong {
+  color: var(--green-strong);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.dev-prediction-panel {
+  display: grid;
+  gap: 14px;
+  border: 1px dashed rgba(47, 168, 79, 0.38);
+  background: #ffffff;
+}
+
+.dev-prediction-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.dev-prediction-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--navy);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.dev-prediction-grid input,
+.dev-prediction-grid select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+  background: #f8fafc;
+  color: var(--navy);
+  font: inherit;
+}
+
+.dev-prediction-result {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.dev-prediction-result div {
+  padding: 12px;
+  border-radius: 14px;
+  background: #e8f5ec;
+}
+
+.dev-prediction-result span,
+.dev-prediction-result strong {
+  display: block;
+}
+
+.dev-prediction-result span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.dev-prediction-result strong {
+  margin-top: 4px;
+  color: var(--green-strong);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.dev-signal-health {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.dev-signal-health h3 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.dev-signal-health dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.dev-signal-health dl div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.dev-signal-health dl div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.dev-signal-health dt,
+.dev-signal-health dd {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.dev-signal-health dt {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.dev-signal-health dd {
+  max-width: 62%;
+  color: var(--navy);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+  text-align: left;
+  direction: ltr;
+}
+
 .station-favorite-action {
   flex: 0 0 auto;
   min-height: 34px;
@@ -2061,6 +2373,493 @@ legend {
   color: #ffffff;
 }
 
+/* Shale reference mobile home layout */
+.app-content {
+  padding: 52px 20px 120px;
+  background: var(--app-bg);
+}
+
+.station-list {
+  gap: 18px;
+}
+
+.station-group {
+  gap: 18px;
+}
+
+.station-group-title {
+  color: #1f2a37;
+  font-size: 1.55rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.station-group-list-hero,
+.station-group-list-compact {
+  gap: 18px;
+}
+
+.best-station-card.hero-card {
+  width: 100%;
+  min-height: 330px;
+  margin: 0;
+  padding: 26px 24px 22px;
+  border-radius: 28px;
+  border: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto auto;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 72% 18%, rgba(255, 255, 255, 0.16), transparent 26%),
+    linear-gradient(135deg, #0f3d2e 0%, #1e7a3a 58%, #2fa84f 100%);
+  box-shadow:
+    0 24px 48px rgba(30, 122, 58, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.best-station-card.hero-card::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -38px;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from 10deg,
+    rgba(255, 255, 255, 0.15) 0deg 5deg,
+    transparent 5deg 12deg
+  );
+  opacity: 0.26;
+  pointer-events: none;
+}
+
+.best-station-card.hero-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.best-station-card .best-station-label {
+  justify-self: end;
+  margin: 0;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(15, 61, 46, 0.54);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(15, 61, 46, 0.22);
+}
+
+.best-station-card .best-station-copy {
+  width: 100%;
+  max-width: 100%;
+  align-items: flex-end;
+  gap: 10px;
+  text-align: right;
+}
+
+.best-station-card .best-station-title {
+  max-width: 100%;
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(2rem, 10vw, 3.15rem);
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.best-station-card .station-card-status {
+  align-self: flex-end;
+  margin: 0;
+  min-height: 0;
+  padding: 8px 22px;
+  border-radius: 999px;
+  font-size: 1.08rem;
+  font-weight: 900;
+  line-height: 1.3;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.best-station-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  align-items: stretch;
+  margin-top: 6px;
+  padding: 6px 0;
+}
+
+.best-station-info-item {
+  min-width: 0;
+  min-height: 82px;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.best-station-info-item + .best-station-info-item {
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.best-station-info-item strong,
+.best-station-info-item span:not(.best-station-info-icon) {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.best-station-info-icon {
+  font-size: 1.12rem;
+  line-height: 1;
+}
+
+.best-station-forecast-line {
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 1rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.best-station-cta {
+  min-height: 58px;
+  padding: 14px 18px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1e7a3a;
+  font-size: 1.08rem;
+  font-weight: 900;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.16);
+}
+
+.best-station-card > .station-favorite-action {
+  justify-self: end;
+  min-height: 44px;
+  margin-top: 0;
+  padding: 9px 22px;
+  border-color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.figma-hero-card {
+  min-height: 220px;
+  display: grid;
+  gap: 12px;
+  text-align: right;
+  padding: 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  background: linear-gradient(135deg, #12b87a 0%, #08955f 55%, #0b8f59 100%);
+  box-shadow: 0 12px 28px rgba(47, 168, 79, 0.26);
+}
+
+.figma-hero-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.figma-hero-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.figma-hero-card .best-station-label {
+  background: linear-gradient(90deg, #facc15, #fbbf24);
+  color: #2b2100;
+  box-shadow: 0 6px 14px rgba(250, 204, 21, 0.35);
+  border: 0;
+  padding: 7px 14px;
+  font-size: 0.95rem;
+}
+
+.figma-hero-subtitle {
+  margin: 0;
+  color: rgba(236, 253, 245, 0.88);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.figma-hero-icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  flex: 0 0 auto;
+}
+
+.figma-hero-icon-wrap .station-icon-img {
+  width: 26px;
+  height: 26px;
+  filter: brightness(0) invert(1);
+}
+
+.figma-hero-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.figma-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.figma-nearby-card {
+  display: grid;
+  grid-template-columns: 56px 1fr 24px;
+  min-height: 96px;
+  height: auto;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #eceff3;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+}
+
+.backup-station-card,
+.nearby-station-row {
+  width: 100%;
+  min-height: 148px;
+  padding: 18px;
+  border: 1px solid rgba(31, 42, 55, 0.05);
+  border-radius: 28px;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) 74px;
+  gap: 16px;
+  align-items: stretch;
+  background: #ffffff;
+  box-shadow:
+    0 18px 36px rgba(31, 42, 55, 0.08),
+    0 4px 12px rgba(31, 42, 55, 0.04);
+}
+
+.backup-station-info,
+.nearby-station-info {
+  min-width: 0;
+  padding-left: 14px;
+  border-left: 1px dashed rgba(31, 42, 55, 0.18);
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  color: #4b5563;
+  text-align: center;
+  font-size: 0.88rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.backup-station-icon,
+.nearby-station-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #ecfdf5;
+}
+
+.backup-station-icon .station-icon-img,
+.nearby-station-icon .station-icon-img {
+  width: 20px;
+  height: 20px;
+}
+
+.backup-station-copy,
+.nearby-station-copy {
+  min-width: 0;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  text-align: right;
+}
+
+.backup-station-title,
+.nearby-station-title {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  color: #1f2a37;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1.24;
+  text-align: right;
+  overflow-wrap: break-word;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.backup-station-label {
+  align-self: flex-end;
+  min-height: 0;
+  padding: 6px 12px;
+}
+
+.backup-station-card .station-card-status,
+.nearby-station-row .station-card-status {
+  align-self: flex-end;
+  margin: 0;
+  min-height: 0;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1.28;
+}
+
+.backup-station-meta,
+.nearby-station-meta {
+  width: 100%;
+  margin: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  color: #4b5563;
+  font-size: 0.72rem;
+  font-weight: 800;
+  overflow: visible;
+  white-space: normal;
+}
+
+.backup-station-meta .station-card-meta-item,
+.nearby-station-meta .station-card-meta-item {
+  min-width: 0;
+}
+
+.backup-station-meta .station-card-meta-item span:last-child,
+.nearby-station-meta .station-card-meta-item span:last-child {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.backup-station-forecast,
+.nearby-station-forecast {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.backup-station-forecast > span,
+.nearby-station-forecast > span {
+  display: grid;
+  gap: 2px;
+}
+
+.backup-station-forecast strong,
+.nearby-station-forecast strong {
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.station-card-side-actions {
+  min-width: 0;
+  display: grid;
+  align-content: space-between;
+  justify-items: center;
+  gap: 12px;
+}
+
+.station-card-side-actions .station-card-row-action {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #c7ccd3;
+  box-shadow: none;
+}
+
+.figma-nearby-card .station-card-side-actions {
+  justify-items: end;
+  align-content: center;
+  gap: 0;
+}
+
+.figma-nearby-card .station-card-row-action {
+  width: 24px;
+  height: 24px;
+}
+
+.station-card-side-actions .station-favorite-action {
+  min-height: 40px;
+  padding: 8px 14px;
+  border-color: rgba(47, 168, 79, 0.55);
+  background: #ffffff;
+  color: #1e7a3a;
+  font-size: 0.95rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.home-info-notice {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 420px) {
+  .app-content {
+    padding-inline: 14px;
+  }
+
+  .best-station-card.hero-card {
+    min-height: 318px;
+    padding: 22px 18px 20px;
+  }
+
+  .best-station-card .best-station-title {
+    font-size: clamp(1.85rem, 9vw, 2.6rem);
+  }
+
+  .backup-station-card,
+  .nearby-station-row {
+    grid-template-columns: 96px minmax(0, 1fr) 64px;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .figma-nearby-card {
+    grid-template-columns: 56px 1fr 24px;
+    min-height: 96px;
+    padding: 16px;
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -2080,102 +2879,29 @@ legend {
   box-shadow: 0 14px 26px rgba(24, 36, 51, 0.06);
 }
 
-.bottom-nav {
-  position: absolute;
-  bottom: 14px;
-  left: 16px;
-  right: 16px;
-  z-index: 40;
-  height: 72px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  align-items: center;
-  border-radius: 999px;
-  background: #0f172a;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(10px);
-  overflow: hidden;
-  direction: ltr;
-}
-
 .nav-indicator {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 8px;
-  width: calc((100% - 24px) / 3);
-  border-radius: 999px;
-  background: linear-gradient(135deg, #16a34a, #2fa84f);
-  transition: left 220ms ease;
-  box-shadow:
-    0 8px 18px rgba(47, 168, 79, 0.36),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  display: none;
 }
 
-.bottom-nav[data-active-tab="account"] .nav-indicator {
-  left: 8px;
+.app-content {
+  padding-bottom: 120px;
+  background: var(--app-bg);
 }
 
-.bottom-nav[data-active-tab="home"] .nav-indicator {
-  left: calc(33.333% + 4px);
+.station-list,
+.station-group,
+.station-group-list-hero,
+.station-group-list-compact {
+  gap: 12px;
 }
 
-.bottom-nav[data-active-tab="search"] .nav-indicator {
-  left: calc(66.666% + 0px);
+.best-station-card .best-station-title {
+  font-size: 1.85rem;
+  line-height: 1.3;
 }
 
-.nav-item {
-  position: relative;
-  z-index: 2;
-  min-width: 0;
-  min-height: 56px;
-  padding: 8px 10px;
-  border: 0;
-  background: transparent;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: #9ca3af;
-  cursor: pointer;
-  transition:
-    color 180ms ease,
-    transform 180ms ease,
-    opacity 180ms ease;
-}
-
-.nav-item:hover,
-.nav-item:focus-visible {
-  color: #f8fafc;
-}
-
-.nav-item svg {
-  width: 22px;
-  height: 22px;
-}
-
-.nav-label {
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: #d1d5db;
-}
-
-.nav-item.active {
-  color: #ffffff;
-  transform: scale(1.05);
-}
-
-.nav-item.active .nav-label {
-  color: #ffffff;
-}
-
-.nav-item:active {
-  transform: scale(0.98);
-}
-
-.nav-item.active:active {
-  transform: scale(1.02);
+.station-group-title {
+  font-size: 1.6rem;
 }
 
 .nav-item-placeholder {
@@ -2285,8 +3011,9 @@ legend {
   align-items: flex-end;
   justify-content: center;
   padding: 16px 10px;
-  background: rgba(17, 33, 28, 0.36);
+  background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(8px);
+  animation: shaleFade 0.18s var(--ease-out) both;
 }
 
 .report-modal {
@@ -2296,8 +3023,9 @@ legend {
   padding: 18px;
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
   box-shadow: 0 24px 60px rgba(12, 29, 23, 0.2);
+  animation: shaleSlideUp 0.24s var(--ease-out) both;
 }
 
 .modal-header {
@@ -2378,13 +3106,18 @@ legend {
   }
 
   .app-shell {
-    width: min(430px, calc(100% - 20px));
-    max-width: none;
+    width: min(var(--shell-max-width), calc(100% - 20px));
+    max-width: var(--shell-max-width);
     margin: 0 auto;
   }
 
   .app-content {
-    padding: 14px 16px 112px;
+    padding: 14px 16px 120px;
+  }
+
+  .bottom-nav {
+    width: auto;
+    max-width: calc(100% - 32px);
   }
 }
 
@@ -2413,4 +3146,542 @@ legend {
     max-width: none;
     text-align: right;
   }
+}
+
+/* Home screen rebuild: stable layout contract */
+.phone-preview {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.phone-frame {
+  width: 390px;
+  height: 844px;
+  max-width: 390px;
+  max-height: 844px;
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 52px;
+}
+
+.phone-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 40px;
+}
+
+.app-shell {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  margin: 0;
+  overflow: hidden;
+}
+
+.app-content {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 16px 110px;
+  direction: rtl;
+  background: var(--app-bg);
+}
+
+.figma-hero-card {
+  min-height: 240px;
+  height: auto;
+  padding: 18px 20px;
+  border-radius: 28px;
+  overflow: visible;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.figma-hero-card .best-station-title,
+.figma-hero-card .figma-hero-copy,
+.figma-hero-card .figma-hero-pills {
+  text-align: right;
+}
+
+.figma-nearby-card,
+.nearby-station-row,
+.backup-station-card {
+  display: grid;
+  grid-template-columns: 56px 1fr 24px;
+  gap: 12px;
+  padding: 16px;
+  min-height: 96px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  border-radius: 18px;
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.05);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+  animation: shaleRowIn 0.38s var(--ease-out) both;
+}
+
+.figma-nearby-card .nearby-station-copy,
+.nearby-station-row .nearby-station-copy,
+.backup-station-card .backup-station-copy {
+  min-width: 0;
+  text-align: right;
+  align-items: flex-end;
+}
+
+.figma-nearby-card .nearby-station-title,
+.nearby-station-row .nearby-station-title,
+.backup-station-card .backup-station-title {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: break-word;
+  word-break: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+}
+
+.figma-nearby-card .nearby-station-meta,
+.nearby-station-row .nearby-station-meta,
+.backup-station-card .backup-station-meta {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.figma-nearby-card *,
+.nearby-station-row *,
+.backup-station-card * {
+  max-height: none;
+}
+
+/* Bottom nav — Claude / app.jsx (floating bar, active = dark pill) */
+.bottom-nav {
+  position: fixed;
+  z-index: 60;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  width: min(calc(100% - 28px), var(--shell-max-width));
+  max-width: calc(100% - 28px);
+  height: auto;
+  min-height: 56px;
+  padding: 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border-radius: 22px;
+  background: var(--nav-bar-bg);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(14px);
+  direction: rtl;
+}
+
+.nav-item {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--nav-inactive-fg);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    flex-grow var(--dur-fast) var(--ease-out),
+    transform 0.15s var(--ease-out);
+}
+
+.nav-item:hover,
+.nav-item:focus-visible {
+  color: var(--navy);
+}
+
+.nav-item.active {
+  flex: 1 1 auto;
+  background: var(--nav-active-bg);
+  color: var(--nav-active-fg);
+  padding-inline: 16px;
+}
+
+.nav-item.active .nav-label {
+  color: var(--nav-active-fg);
+  font-weight: 800;
+}
+
+.nav-item svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: currentColor;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.nav-item.active svg {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.nav-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.nav-item:active {
+  transform: scale(0.98);
+}
+
+.nav-item.active:active {
+  transform: scale(1);
+}
+
+/* Status label color overrides */
+.badge-available {
+  background: #2fa84f !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.figma-hero-card .best-station-label.badge-available {
+  box-shadow: none !important;
+}
+
+/* Hero card — calm mood (app.jsx THEME.calm: navy + emerald accent) */
+.figma-hero-card {
+  border-radius: 28px;
+  min-height: 185px;
+  height: auto;
+  padding: 16px 18px;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(34, 197, 94, 0.22), transparent 30%),
+    radial-gradient(circle at 14% 88%, rgba(30, 41, 59, 0.95), transparent 42%),
+    linear-gradient(155deg, #0f172a 0%, #1e293b 48%, #0f172a 100%);
+  box-shadow:
+    0 22px 44px rgba(15, 23, 42, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.figma-hero-card .best-station-title {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+
+.figma-hero-card .best-station-label.badge-available {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(12px);
+  box-shadow: none !important;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #ffffff !important;
+}
+
+.figma-hero-pill {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(10px);
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.figma-hero-icon-wrap {
+  width: 56px;
+  height: 56px;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  backdrop-filter: blur(12px);
+  border-radius: 18px;
+}
+
+.figma-hero-icon-wrap .station-icon-img {
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+}
+
+.station-card-status-available {
+  background: #2fa84f !important;
+  color: #ffffff !important;
+}
+
+.station-card-status-light {
+  background: #facc15 !important;
+  color: #1f2a37 !important;
+}
+
+.station-card-status-long,
+.station-card-status-busy,
+.station-card-status-crowded {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+.station-card-status-closed,
+.station-card-status-no_fuel,
+.status-no-fuel {
+  background: #9ca3af !important;
+  color: #1f2a37 !important;
+}
+
+/* Hard hero-card override (high specificity) */
+.station-card.best-station-card.hero-card.figma-hero-card {
+  min-height: 180px !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 16px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+  gap: 10px !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-head,
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-copy,
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-pills {
+  margin: 0 !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-icon-wrap {
+  width: 56px !important;
+  height: 56px !important;
+  background: rgba(34, 197, 94, 0.14) !important;
+  border: 1px solid rgba(34, 197, 94, 0.38) !important;
+  border-radius: 18px !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-icon-wrap {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .hero-gold-icon {
+  width: 88%;
+  height: 88%;
+  object-fit: contain !important;
+  object-position: center !important;
+  display: block !important;
+  background: transparent !important;
+  filter: brightness(0) invert(1)
+    drop-shadow(0 0 10px rgba(34, 197, 94, 0.5)) !important;
+  box-shadow: none !important;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* Final hero — calm slate + emerald highlights */
+.station-card.best-station-card.hero-card.figma-hero-card {
+  min-height: 210px !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 18px 20px !important;
+  border-radius: 28px !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background:
+    radial-gradient(circle at 82% 14%, rgba(34, 197, 94, 0.2), transparent 32%),
+    radial-gradient(circle at 16% 86%, rgba(30, 41, 59, 0.92), transparent 40%),
+    linear-gradient(155deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+  box-shadow:
+    0 22px 48px rgba(15, 23, 42, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  overflow: hidden !important;
+  animation: shaleHeroIn 0.42s var(--ease-out) both;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-head {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin: 0 !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-copy {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+  text-align: right !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .best-station-title {
+  margin: 0 !important;
+  color: #ffffff !important;
+  font-size: 2rem !important;
+  font-weight: 800 !important;
+  line-height: 1.12 !important;
+  letter-spacing: -0.02em !important;
+  text-wrap: balance;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .best-station-label.badge-available {
+  align-self: flex-start !important;
+  min-height: 0 !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  backdrop-filter: blur(10px);
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-pills {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin: 0 !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-pill {
+  min-height: 0 !important;
+  padding: 6px 10px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  backdrop-filter: blur(10px);
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .figma-hero-icon-wrap {
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 18px !important;
+  background: rgba(34, 197, 94, 0.14) !important;
+  border: 1px solid rgba(34, 197, 94, 0.38) !important;
+  backdrop-filter: blur(12px);
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+
+.station-card.best-station-card.hero-card.figma-hero-card .hero-gold-icon {
+  width: 88% !important;
+  height: 88% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  display: block !important;
+  background: transparent !important;
+  filter: brightness(0) invert(1)
+    drop-shadow(0 0 10px rgba(34, 197, 94, 0.55)) !important;
+  box-shadow: none !important;
+}
+
+/* Responsive container + fixed nav (screen-size independent) */
+.phone-preview {
+  min-height: 100vh !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: stretch !important;
+  padding: 0 !important;
+}
+
+.phone-frame {
+  width: 100% !important;
+  max-width: 420px !important;
+  min-height: 100vh !important;
+  height: 100vh !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.phone-frame::before,
+.phone-frame::after {
+  display: none !important;
+}
+
+.phone-screen {
+  width: 100% !important;
+  min-height: 100vh !important;
+  height: 100vh !important;
+  border-radius: 0 !important;
+}
+
+.app-shell {
+  width: 100% !important;
+  max-width: 420px !important;
+  min-height: 100vh !important;
+  height: 100vh !important;
+  margin: 0 auto !important;
+}
+
+.app-content {
+  min-height: 100vh !important;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)) !important;
+  overflow-x: hidden !important;
+}
+
+.bottom-nav {
+  position: fixed !important;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+  width: min(calc(100% - 28px), var(--shell-max-width)) !important;
+  max-width: calc(100% - 28px) !important;
+  border-radius: 22px !important;
+  padding: 8px !important;
+  padding-bottom: 8px !important;
+  z-index: 60 !important;
 }

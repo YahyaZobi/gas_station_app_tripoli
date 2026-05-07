@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shale — Design Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="react.js"></script>
+  <script src="react-dom.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #e7ecea;
+      min-height: 100vh;
+      font-family: "Cairo", system-ui, sans-serif;
+    }
+    #root { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+    @keyframes shale-glow-pulse {
+      0%, 100% { opacity: 0.6; transform: scale(1); }
+      50%       { opacity: 1;   transform: scale(1.08); }
+    }
+    @keyframes shale-fade-up {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes shale-fade-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes shale-slide-in {
+      from { opacity: 0; transform: translateX(10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .shale-avail-glow { animation: shale-glow-pulse 2.4s ease-in-out infinite; }
+    .shale-hero-in    { animation: shale-fade-up 0.4s ease both; }
+    .shale-row-in     { animation: shale-fade-up 0.35s ease both; }
+    .shale-tab-in     { animation: shale-fade-in 0.25s ease both; }
+
+    .shale-press {
+      transition: transform 0.12s ease, opacity 0.12s ease;
+    }
+    .shale-press:active {
+      transform: scale(0.96);
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="error-display" style="display:none;background:#fee2e2;color:#991b1b;padding:16px;font-family:monospace;font-size:13px;white-space:pre-wrap;position:fixed;top:0;left:0;right:0;z-index:9999;max-height:50vh;overflow:auto;"></div>
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      var d = document.getElementById('error-display');
+      d.style.display = 'block';
+      d.textContent = 'ERROR: ' + msg + '\nLine: ' + line + '\n' + (err && err.stack || '');
+    };
+    window.addEventListener('unhandledrejection', function(e) {
+      var d = document.getElementById('error-display');
+      d.style.display = 'block';
+      d.textContent = 'PROMISE ERROR: ' + e.reason;
+    });
+  </script>
+  <!-- Same order as Shale.html: frame + tweaks expose window.*, then app.jsx mounts -->
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

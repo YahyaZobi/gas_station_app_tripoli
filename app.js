@@ -1,7 +1,6 @@
 import {
   buildStationSections,
   createReportRecord,
-  DEFAULT_DISCOVERY_RADIUS_KM,
   findNearestStationWithinDistance,
   formatDistanceLabel,
   formatNumber,
@@ -17,15 +16,24 @@ import {
   matchesStationSearch,
   minutesSince,
   PRESENCE_HEARTBEAT_MS,
+  predictCrowdStatus,
+  predictStationStatus,
   STATUS_META,
   formatRelativeTime,
   projectStations,
+  getStationPriorityScore,
   sortStationsForDiscovery,
   sortStationsForSearch,
 } from "./logic.mjs";
-import { getLocationModeConfig, getProtocolWarning } from "./environment-utils.mjs";
+import {
+  getDevLocationOverrideConfig,
+  getDevPanelConfig,
+  getLocationModeConfig,
+  getProtocolWarning,
+} from "./environment-utils.mjs";
 import { buildDecisionFirstLayout } from "./home-layout-utils.mjs";
-import { getGoogleMapsUrl, getLeafletMarkerClass } from "./map-utils.mjs";
+import { getGoogleMapsDirectionsUrl } from "./map-utils.mjs";
+import { getGoogleRouteMetrics, hasGoogleRouteConfig, resolveGoogleMapsApiKey } from "./route-metrics-utils.mjs";
 import {
   isFavoriteStation,
   readFavoriteStations,
@@ -42,12 +50,33 @@ import { getAnonymousDeviceId } from "./presence-storage.mjs";
 import { readRecentStations, saveRecentStation } from "./recent-stations-storage.mjs";
 import { createRepository } from "./repository.mjs";
 import { resolveSelectedStationId } from "./selection-utils.mjs";
+import { getUsageAnalyticsSummary, trackEvent } from "./usage-analytics-storage.mjs";
 
-const tripoliCenter = {
+const fallbackTripoliLocation = {
   latitude: 32.8872,
   longitude: 13.1913,
 };
-const EXPANDED_DISCOVERY_RADIUS_KM = 15;
+const NEARBY_RADIUS_STEPS_KM = [5, 10, 15];
+const EXPANDED_DISCOVERY_RADIUS_KM = NEARBY_RADIUS_STEPS_KM[NEARBY_RADIUS_STEPS_KM.length - 1];
+const LOCATION_STATES = {
+  gpsLoading: "gps_loading",
+  gpsSuccess: "gps_success",
+  gpsFailed: "gps_failed",
+  fallbackUsed: "fallback_used",
+};
+// Development-only location override.
+// Set DEV_LOCATION_OVERRIDE.enabled = true for desktop testing.
+// Set DEV_LOCATION_OVERRIDE.enabled = false before production.
+const DEV_LOCATION_OVERRIDE = {
+  enabled: false,
+  latitude: 32.9028,
+  longitude: 13.3354,
+};
+const DEV_RANKING_TEST_MODE = {
+  enabled: false,
+  // Scenarios: normal_day, thursday_evening, friday_morning, fuel_shortage_emergency
+  scenario: "normal_day",
+};
 
 const fallbackStations = [
   {
@@ -102,12 +131,19 @@ const demoSeedReports = [
 
 let stations = [...fallbackStations];
 let persistedReports = [];
-let transientReports = [...demoSeedReports];
+let transientReports = [];
 let presenceRows = [];
 
 const state = {
-  userLocation: tripoliCenter,
+  realUserLocation: null,
+  fallbackTripoliLocation,
+  userLocation: fallbackTripoliLocation,
   hasUserLocation: false,
+  isLocatingUser: true,
+  locationState: LOCATION_STATES.gpsLoading,
+  locationSource: "fallback_tripoli_center",
+  locationFailureReason: "",
+  gpsPermissionStatus: "unknown",
   selectedStationId: fallbackStations[0]?.id ?? null,
   shouldCenterSelectedOnMap: false,
   shouldCenterUserOnMap: false,
@@ -115,7 +151,7 @@ const state = {
   activeTab: "home",
   searchQuery: "",
   selectedArea: "",
-  discoveryRadiusKm: DEFAULT_DISCOVERY_RADIUS_KM,
+  discoveryRadiusKm: NEARBY_RADIUS_STEPS_KM[0],
 };
 
 const repository = createRepository({
@@ -124,6 +160,7 @@ const repository = createRepository({
 
 const stationMap = document.querySelector("#station-map");
 const mapFocusPill = document.querySelector("#map-focus-pill");
+const mapPanel = document.querySelector(".map-panel");
 const stationList = document.querySelector("#station-list");
 const stationTitle = document.querySelector("#station-title");
 const stationStatusBadge = document.querySelector("#station-status-badge");
@@ -132,6 +169,7 @@ const stationDetails = document.querySelector("#station-details");
 const detailsPanel = document.querySelector(".details-panel");
 const environmentWarning = document.querySelector("#environment-warning");
 const locationBanner = document.querySelector("#location-banner");
+const layout = document.querySelector(".layout");
 const listPanelHeading = document.querySelector("#list-panel-heading");
 const screenTitle = document.querySelector("#screen-title");
 const screenSubtitle = document.querySelector("#screen-subtitle");
@@ -167,23 +205,44 @@ const detailsFields = {
 
 const mapState = {
   instance: null,
-  markers: [],
+  markersByStationId: new Map(),
   userMarker: null,
+  infoWindow: null,
   hasInitialView: false,
+  apiLoaderPromise: null,
+};
+
+const isDevPanelEnabled = getDevPanelConfig().enableDevPanel;
+const presenceSignalHealth = {
+  locationSource: "disabled",
+  nearestStationName: "غير متاح",
+  nearestStationDistanceKm: null,
+  lastHeartbeatAt: null,
+  heartbeatStatus: "disabled",
+  heartbeatReason: "لم يبدأ إرسال الإشارات",
+  heartbeatError: "",
 };
 
 let demoUpdateTimerId = null;
 let presenceHeartbeatTimerId = null;
 let successToastTimerId = null;
-let latestProjectedStations = [];
+let latestEnrichedStations = [];
+let routeMetricsByStationId = new Map();
+let latestRouteMetricsRequestKey = "";
+let routeMetricsRequestKey = "";
+let routeMetricsRequestVersion = 0;
+let routeMetricsStatus = "idle";
 let hasStatusHistory = false;
 let previousStationStatusById = new Map();
 const anonymousDeviceId = getAnonymousDeviceId();
 
+trackEvent("app_open");
 renderEnvironmentWarning();
 await safeHydrateData();
+locationBanner.textContent = "جاري تحديد موقعك...";
 render();
 safeHydrateLocation();
+initDevPredictionPanel();
 scheduleDemoUpdate();
 safeSubscribeToRealtime();
 
@@ -259,7 +318,7 @@ recenterUserButton.addEventListener("click", () => {
 recenterTripoliButton.addEventListener("click", () => {
   state.shouldCenterSelectedOnMap = false;
   state.shouldCenterUserOnMap = false;
-  centerMapOn(tripoliCenter, 11);
+  centerMapOn(fallbackTripoliLocation, 11);
   mapFocusPill.textContent = "الخريطة على طرابلس";
 });
 
@@ -288,7 +347,12 @@ reportForm.addEventListener("submit", (event) => {
 });
 
 stationSearchInput.addEventListener("input", (event) => {
-  state.searchQuery = event.target.value.trim();
+  const nextSearchQuery = event.target.value.trim();
+  if (nextSearchQuery && !state.searchQuery) {
+    trackEvent("search_used");
+  }
+
+  state.searchQuery = nextSearchQuery;
   state.didAutoFocusBestStation = false;
   render();
 });
@@ -312,9 +376,23 @@ bottomNavItems.forEach((item) => {
     }
 
     state.activeTab = nextTab;
+    setBottomNavActiveState();
+    trackEvent("tab_changed", { tabName: nextTab });
     render();
   });
 });
+
+function setBottomNavActiveState() {
+  bottomNavItems.forEach((item) => {
+    const isActive = item.dataset.tab === state.activeTab;
+    item.classList.toggle("active", isActive);
+    item.setAttribute("aria-current", isActive ? "page" : "false");
+  });
+
+  if (bottomNav) {
+    bottomNav.dataset.activeTab = state.activeTab;
+  }
+}
 
 async function handleReportSubmit(event) {
   event.preventDefault();
@@ -368,25 +446,45 @@ async function handleRealtimeInsert() {
 }
 
 function render() {
-  const now = new Date();
-  const projectedStations = projectStations(stations, getAllReports(), state.userLocation, presenceRows, now);
-  projectedStations.forEach((station) => {
-    console.info(
-      `[Status] ${station.name} | activeDevices: ${station.activeDevices ?? 0} | final status: ${getDisplayStatus(station)}`,
-    );
-  });
-  processStationNotifications(projectedStations, now);
-  latestProjectedStations = projectedStations;
-  const areaOptions = getAreaOptions(projectedStations);
+  if (state.locationState === LOCATION_STATES.gpsLoading) {
+    stationList.innerHTML = "";
+    clearMapMarkers();
+    listEmpty.classList.add("hidden");
+    searchPrompt.classList.add("hidden");
+    showMoreButton.classList.add("hidden");
+    mapFocusPill.textContent = "جاري تحديد موقعك...";
+    renderStationDetails(null);
+    return;
+  }
+
+  const rankingScenarioContext = getRankingScenarioContext(new Date(), stations);
+  const now = rankingScenarioContext.now;
+  const reportsForProjection = [...getAllReports(), ...rankingScenarioContext.injectedReports];
+  const baseProjectedStations = projectStations(
+    stations,
+    reportsForProjection,
+    state.userLocation,
+    presenceRows,
+    now,
+  );
+  const routingResolution = scheduleRouteMetricsRefresh(baseProjectedStations);
+  const enrichedStations = buildEnrichedStations(baseProjectedStations, routingResolution.requestKey);
+  logLocationDebugSnapshot();
+  assertEnrichedStations(enrichedStations, "render");
+  logEnrichedStationsTable(enrichedStations);
+  processStationNotifications(enrichedStations, now);
+  latestEnrichedStations = enrichedStations;
+  const areaOptions = getAreaOptions(enrichedStations);
   syncAreaFilter(areaOptions);
 
-  const isSearchTab = state.activeTab === "search";
-  const activeArea = isSearchTab ? state.selectedArea : "";
-  const hasSearch = isSearchTab && Boolean(state.searchQuery || activeArea);
-  const nearbyRadiusKm = state.discoveryRadiusKm;
-  const radiusStations = projectedStations.filter((station) => station.distanceKm <= nearbyRadiusKm);
-  const nearbyBaseStations = radiusStations;
-  const discoveryBaseStations = isSearchTab ? projectedStations : nearbyBaseStations;
+  const isMapTab = state.activeTab === "search";
+  const activeArea = isMapTab ? state.selectedArea : "";
+  const hasSearch = isMapTab && Boolean(state.searchQuery || activeArea);
+  const nearbyScope = getNearbyScope(enrichedStations);
+  const nearbyRadiusKm = nearbyScope.radiusKm;
+  const nearbyBaseStations = nearbyScope.stations;
+  state.discoveryRadiusKm = nearbyRadiusKm;
+  const discoveryBaseStations = nearbyBaseStations;
   const areaScopedStations = activeArea
     ? discoveryBaseStations.filter((station) => getStationAreaLabel(station) === activeArea)
     : discoveryBaseStations;
@@ -399,15 +497,8 @@ function render() {
   const bestStationCandidates = hasSearch
     ? discoveryStations
     : discoveryStations.filter((station) => station.distanceKm <= nearbyRadiusKm);
-  const canExpandRadius = !hasSearch &&
-    state.activeTab === "home" &&
-    state.discoveryRadiusKm < EXPANDED_DISCOVERY_RADIUS_KM &&
-    projectedStations.some(
-      (station) =>
-        station.distanceKm > state.discoveryRadiusKm &&
-        station.distanceKm <= EXPANDED_DISCOVERY_RADIUS_KM,
-    );
-  const stationSections = buildStationSections(projectedStations, {
+  const canExpandRadius = false;
+  const stationSections = buildStationSections(enrichedStations, {
     bestCandidates: bestStationCandidates,
     listCandidates: discoveryStations,
     listLimit: 5,
@@ -418,30 +509,28 @@ function render() {
     stationSections.avoidStations.length;
 
   console.info(
-    `[Home] total stations loaded: ${projectedStations.length}, rendered station count: ${renderedStationCount}, best station found: ${stationSections.bestStation ? "yes" : "no"}`,
+    `[Home] total stations loaded: ${enrichedStations.length}, rendered station count: ${renderedStationCount}, best station found: ${stationSections.bestStation ? "yes" : "no"}`,
   );
 
-  if (!projectedStations.length) {
+  updateMapActionButtons();
+  syncActiveTabUi();
+
+  if (!nearbyBaseStations.length) {
     stationList.innerHTML = "";
     clearMapMarkers();
-    ensureMap();
-    centerMapOn(tripoliCenter, 11);
-    mapFocusPill.textContent = "الخريطة على طرابلس";
+    mapFocusPill.textContent = "لا توجد محطات على الخريطة حالياً";
     listEmpty.classList.remove("hidden");
     searchPrompt.classList.add("hidden");
     renderStationDetails(null);
     return;
   }
 
-  updateMapActionButtons();
-  syncActiveTabUi();
-
   if (stationSections.bestStation && !state.didAutoFocusBestStation) {
     state.selectedStationId = stationSections.bestStation.id;
     state.shouldCenterSelectedOnMap = true;
     state.didAutoFocusBestStation = true;
   } else {
-    state.selectedStationId = resolveSelectedStationId(state.selectedStationId, projectedStations);
+    state.selectedStationId = resolveSelectedStationId(state.selectedStationId, nearbyBaseStations);
   }
 
   renderStationList({
@@ -450,50 +539,341 @@ function render() {
     hasSearch,
     canExpandRadius,
   });
-  renderStationDetails(projectedStations.find((station) => station.id === state.selectedStationId));
+  renderMap(nearbyBaseStations, stationSections.bestStation);
+  renderStationDetails(nearbyBaseStations.find((station) => station.id === state.selectedStationId));
 }
 
-function renderMap(projectedStations, bestStation) {
-  ensureMap();
+function buildEnrichedStations(projectedStations, requestKey = "") {
+  const canUseRouteMetrics = Boolean(requestKey) &&
+    routeMetricsStatus === "ready" &&
+    routeMetricsRequestKey === requestKey;
 
-  if (!mapState.instance) {
+  return projectedStations
+    .map((station) => {
+      const routeMetric = canUseRouteMetrics ? routeMetricsByStationId.get(station.id) : null;
+      const distanceKm = Number.isFinite(routeMetric?.distanceKm)
+        ? routeMetric.distanceKm
+        : station.distanceKm;
+      const routeSource = routeMetric?.routeSource ?? "haversine_fallback";
+      const etaMinutes = Number.isFinite(routeMetric?.etaMinutes)
+        ? routeMetric.etaMinutes
+        : getFallbackEtaMinutesForStation({ ...station, distanceKm });
+      const enrichedStation = {
+        ...station,
+        id: station.id,
+        name: station.name,
+        latitude: station.latitude,
+        longitude: station.longitude,
+        distanceKm,
+        etaMinutes,
+        routeSource,
+        status: station.status,
+      };
+      const score = getStationPriorityScore(enrichedStation);
+      return {
+        ...enrichedStation,
+        score,
+        __isEnrichedStation: true,
+      };
+    })
+    .sort((left, right) => right.score - left.score || left.distanceKm - right.distanceKm);
+}
+
+function scheduleRouteMetricsRefresh(projectedStations) {
+  const requestKey = createRouteMetricsRequestKey(state.userLocation, projectedStations);
+  if (!projectedStations.length) {
+    routeMetricsByStationId = new Map();
+    routeMetricsStatus = "fallback";
+    routeMetricsRequestKey = requestKey;
+    return { readyForRanking: true, requestKey };
+  }
+
+  const routeConfigAvailable = hasGoogleRouteConfig(import.meta.env ?? {}, window.BENZINA_CONFIG ?? {});
+  const hasValidUserLocation = Number.isFinite(state.userLocation?.latitude) && Number.isFinite(state.userLocation?.longitude);
+  if (!hasValidUserLocation || !routeConfigAvailable || !state.hasUserLocation) {
+    routeMetricsByStationId = new Map();
+    routeMetricsStatus = "fallback";
+    routeMetricsRequestKey = requestKey;
+    return { readyForRanking: true, requestKey };
+  }
+
+  if (requestKey === latestRouteMetricsRequestKey) {
+    return { readyForRanking: routeMetricsStatus !== "pending", requestKey };
+  }
+  latestRouteMetricsRequestKey = requestKey;
+  routeMetricsByStationId = new Map();
+  routeMetricsRequestKey = "";
+  routeMetricsStatus = "pending";
+  const requestVersion = ++routeMetricsRequestVersion;
+  void getGoogleRouteMetrics(state.userLocation, projectedStations, {
+    runtimeEnv: import.meta.env ?? {},
+    browserConfig: window.BENZINA_CONFIG ?? {},
+    isDev: isRouteMetricsDevLoggingEnabled(),
+  }).then((metrics) => {
+    if (requestVersion !== routeMetricsRequestVersion) {
+      return;
+    }
+    routeMetricsByStationId = new Map(metrics.map((metric) => [metric.stationId, metric]));
+    routeMetricsRequestKey = requestKey;
+    routeMetricsStatus = "ready";
+    render();
+  }).catch(() => {
+    if (requestVersion !== routeMetricsRequestVersion) {
+      return;
+    }
+    routeMetricsByStationId = new Map();
+    routeMetricsRequestKey = requestKey;
+    routeMetricsStatus = "fallback";
+    if (isRouteMetricsDevLoggingEnabled()) {
+      console.warn("[Routes] Google route lookup failed, using Haversine fallback", {
+        routeSource: "fallback",
+      });
+    }
+    render();
+  });
+  return { readyForRanking: false, requestKey };
+}
+
+function createRouteMetricsRequestKey(userLocation, stationsList) {
+  if (!userLocation || !Number.isFinite(userLocation.latitude) || !Number.isFinite(userLocation.longitude)) {
+    return "invalid-user-location";
+  }
+  const userKey = `${userLocation.latitude.toFixed(5)},${userLocation.longitude.toFixed(5)}`;
+  const stationKey = stationsList
+    .map((station) => `${station.id}:${station.latitude.toFixed(5)},${station.longitude.toFixed(5)}`)
+    .join("|");
+  return `${userKey}|${stationKey}`;
+}
+
+function isRouteMetricsDevLoggingEnabled() {
+  if (typeof import.meta !== "undefined" && import.meta.env) {
+    if (import.meta.env.DEV) {
+      return true;
+    }
+  }
+  return Boolean(window?.BENZINA_CONFIG?.ENABLE_DEV_PANEL);
+}
+
+function getFallbackEtaMinutesForStation(station) {
+  if (!Number.isFinite(station?.distanceKm)) {
+    return null;
+  }
+
+  const speedKmH = station?.status === "busy" || station?.status === "crowded" || station.distanceKm >= 7
+    ? 15
+    : station.distanceKm <= 1.5
+      ? 35
+      : 25;
+  const etaMinutes = Math.ceil((station.distanceKm / speedKmH) * 60);
+  return Math.min(60, Math.max(2, etaMinutes));
+}
+
+function getNearbyScope(stationsList) {
+  const validStations = stationsList
+    .filter((station) => Number.isFinite(station.distanceKm))
+    .sort((left, right) => left.distanceKm - right.distanceKm);
+
+  for (const radiusKm of NEARBY_RADIUS_STEPS_KM) {
+    const withinRadius = validStations.filter((station) => station.distanceKm <= radiusKm);
+    if (withinRadius.length >= 3) {
+      return {
+        radiusKm,
+        stations: withinRadius,
+      };
+    }
+  }
+
+  const maxRadiusKm = NEARBY_RADIUS_STEPS_KM[NEARBY_RADIUS_STEPS_KM.length - 1];
+  return {
+    radiusKm: maxRadiusKm,
+    stations: validStations.filter((station) => station.distanceKm <= maxRadiusKm),
+  };
+}
+
+function logLocationDebugSnapshot() {
+  if (!isRouteMetricsDevLoggingEnabled()) {
     return;
   }
 
-  mapState.instance.invalidateSize(false);
-  syncMapMarkers(projectedStations, bestStation);
+  console.info("[Location]", {
+    state: state.locationState,
+    source: state.locationSource,
+    gpsPermissionStatus: state.gpsPermissionStatus,
+    gpsUsed: state.hasUserLocation,
+    fallbackUsed: !state.hasUserLocation,
+    userLatitude: state.userLocation?.latitude ?? null,
+    userLongitude: state.userLocation?.longitude ?? null,
+    failureReason: state.locationFailureReason || null,
+  });
+}
 
-  if (!mapState.hasInitialView) {
-    centerMapOn(tripoliCenter, 11);
-    mapState.hasInitialView = true;
+function assertEnrichedStations(stationsList, context) {
+  const invalidStations = stationsList.filter(
+    (station) =>
+      !station?.__isEnrichedStation ||
+      !Number.isFinite(station.distanceKm) ||
+      !Number.isFinite(station.etaMinutes) ||
+      typeof station.routeSource !== "string" ||
+      !Number.isFinite(station.score),
+  );
+
+  if (invalidStations.length) {
+    console.error("[DataFlow] UI render received non-enriched station data", {
+      context,
+      invalidStations: invalidStations.map((station) => ({
+        id: station?.id,
+        name: station?.name,
+        distanceKm: station?.distanceKm,
+        etaMinutes: station?.etaMinutes,
+        routeSource: station?.routeSource,
+        score: station?.score,
+        isEnriched: station?.__isEnrichedStation === true,
+      })),
+    });
   }
+}
 
-  const selectedStation =
-    projectedStations.find((station) => station.id === state.selectedStationId) ??
-    projectedStations[0];
+function assertStationSectionsUseEnrichedStations(stationSections) {
+  const sectionStations = [
+    stationSections.bestStation,
+    stationSections.backupStation,
+    ...stationSections.recommendedStations,
+    ...stationSections.nearbyStations,
+    ...stationSections.avoidStations,
+  ].filter(Boolean);
+  assertEnrichedStations(sectionStations, "station-sections");
+}
 
-  if (!selectedStation) {
-    centerMapOn(state.userLocation, 11);
-    mapFocusPill.textContent = "الخريطة على طرابلس";
+function logEnrichedStationsTable(enrichedStations) {
+  if (typeof console.table !== "function") {
     return;
   }
 
-  syncUserMarker();
+  console.table(
+    enrichedStations.slice(0, 5).map((station) => ({
+      name: station.name,
+      lat: station.latitude,
+      lng: station.longitude,
+      distanceKm: Number.isFinite(station.distanceKm)
+        ? Number(station.distanceKm.toFixed(3))
+        : null,
+      etaMinutes: Number.isFinite(station.etaMinutes) ? station.etaMinutes : null,
+      routeSource: station.routeSource,
+      score: Number(station.score.toFixed(2)),
+    })),
+  );
+}
 
-  if (state.shouldCenterUserOnMap) {
-    centerMapOn(state.userLocation, 12);
-    state.shouldCenterUserOnMap = false;
+function getRankingScenarioContext(baseNow, stationsList) {
+  const runtimeOverride = window.__RANKING_TEST_MODE__;
+  const effectiveMode = runtimeOverride ?? DEV_RANKING_TEST_MODE;
+  if (!effectiveMode?.enabled) {
+    return {
+      now: baseNow,
+      injectedReports: [],
+    };
   }
 
-  if (state.shouldCenterSelectedOnMap) {
-    centerMapOn(selectedStation, 13);
-    state.shouldCenterSelectedOnMap = false;
+  switch (effectiveMode.scenario) {
+    case "thursday_evening":
+      return {
+        now: resolveScenarioDate(baseNow, 4, 20),
+        injectedReports: [],
+      };
+    case "friday_morning":
+      return {
+        now: resolveScenarioDate(baseNow, 5, 8),
+        injectedReports: [],
+      };
+    case "fuel_shortage_emergency":
+      return {
+        now: new Date(baseNow),
+        injectedReports: createEmergencyScenarioReports(stationsList, baseNow),
+      };
+    case "normal_day":
+    default:
+      return {
+        now: new Date(baseNow),
+        injectedReports: [],
+      };
+  }
+}
+
+function resolveScenarioDate(baseNow, targetDayOfWeek, targetHour) {
+  const resolved = new Date(baseNow);
+  const deltaDays = (targetDayOfWeek - resolved.getDay() + 7) % 7;
+  resolved.setDate(resolved.getDate() + deltaDays);
+  resolved.setHours(targetHour, 0, 0, 0);
+  return resolved;
+}
+
+function createEmergencyScenarioReports(stationsList, now) {
+  const emergencyTimestamp = new Date(now.getTime() - 2 * 60000).toISOString();
+  return stationsList.map((station, index) => ({
+    id: `dev-emergency-${station.id}-${index}`,
+    stationId: station.id,
+    status: "no_fuel",
+    queueLevel: "long",
+    createdAt: emergencyTimestamp,
+    latitude: station.latitude,
+    longitude: station.longitude,
+  }));
+}
+
+function renderMap(enrichedStations, bestStation) {
+  assertEnrichedStations(enrichedStations, "map");
+  if (bestStation) {
+    assertEnrichedStations([bestStation], "map-best-station");
   }
 
-  mapFocusPill.textContent = `${selectedStation.name} · ${getDisplayStatus(selectedStation)}`;
+  if (state.activeTab !== "search") {
+    return;
+  }
+
+  void ensureGoogleMapsLoaded().then(() => {
+    ensureMap();
+    if (!mapState.instance) {
+      return;
+    }
+
+    syncMapMarkers(enrichedStations, bestStation);
+    syncUserMarker();
+
+    if (!mapState.hasInitialView) {
+      centerMapOn(fallbackTripoliLocation, 11);
+      mapState.hasInitialView = true;
+    }
+
+    const selectedStation =
+      enrichedStations.find((station) => station.id === state.selectedStationId) ??
+      enrichedStations[0];
+
+    if (!selectedStation) {
+      centerMapOn(state.userLocation, 11);
+      mapFocusPill.textContent = "الخريطة على طرابلس";
+      return;
+    }
+
+    if (state.shouldCenterUserOnMap) {
+      centerMapOn(state.userLocation, 12);
+      state.shouldCenterUserOnMap = false;
+    }
+
+    if (state.shouldCenterSelectedOnMap) {
+      centerMapOn(selectedStation, 13);
+      state.shouldCenterSelectedOnMap = false;
+    }
+
+    mapFocusPill.textContent = `${selectedStation.name} · ${getDisplayStatus(selectedStation)}`;
+    renderMapStationBottomSheet(selectedStation);
+  }).catch(() => {
+    mapFocusPill.textContent = "تعذر تحميل Google Maps";
+  });
 }
 
 function renderStationList({ stationSections, searchResults, hasSearch, canExpandRadius = false }) {
+  assertStationSectionsUseEnrichedStations(stationSections);
+  assertEnrichedStations(searchResults, "search-results");
   stationList.innerHTML = "";
   searchPrompt.classList.add("hidden");
   const template = document.querySelector("#station-card-template");
@@ -507,11 +887,17 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
   }
 
   if (state.activeTab === "search") {
-    renderSearchResults({
-      stations: searchResults,
-      hasSearch,
-      template,
-    });
+    if (hasSearch) {
+      renderSearchResults({
+        stations: searchResults,
+        hasSearch,
+        template,
+      });
+    } else {
+      stationList.innerHTML = "";
+      listEmpty.classList.add("hidden");
+      searchPrompt.classList.add("hidden");
+    }
     showMoreButton.classList.add("hidden");
     return;
   }
@@ -523,6 +909,8 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
     nearbyStations,
     avoidStations,
   }, 3);
+  layout.nearbyVisible = sortStationsForDiscovery(layout.nearbyVisible);
+  layout.otherStations = sortStationsForDiscovery(layout.otherStations);
   if (!layout.nearbyVisible.length && !layout.heroStation) {
     layout.nearbyVisible = [...recommendedStations, ...nearbyStations, ...avoidStations].slice(0, 5);
   }
@@ -612,6 +1000,7 @@ function createAccountScreen() {
     ),
     createFavoriteStationsCard(),
     createRecentStationsCard(),
+    createUsageActivityCard(),
     createAccountCardElement("عن التطبيق", "شيل يساعدك تعرف أقرب محطة مناسبة قبل ما تمشي"),
     createAccountCardElement("الخصوصية", "لا نعرض موقعك لأي مستخدم آخر"),
   );
@@ -690,6 +1079,40 @@ function createRecentStationsCard() {
     list.append(createAccountStationListItem(station, {
       timeText: getRecentStationOpenedText(station.timestamp),
     }));
+  });
+
+  card.append(list);
+  return card;
+}
+
+function createUsageActivityCard() {
+  const card = document.createElement("article");
+  card.className = "account-card";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "نشاطك";
+  card.append(heading);
+
+  const usageSummary = getUsageAnalyticsSummary();
+  const favoriteStations = readFavoriteStations();
+  const list = document.createElement("ul");
+  list.className = "account-activity-list";
+
+  [
+    ["عدد المحطات التي فتحتها", usageSummary.stationOpenCount],
+    ["عدد عمليات البحث", usageSummary.searchUsedCount],
+    ["عدد المحطات المحفوظة", favoriteStations.length],
+  ].forEach(([label, value]) => {
+    const item = document.createElement("li");
+
+    const labelElement = document.createElement("span");
+    labelElement.textContent = label;
+
+    const valueElement = document.createElement("strong");
+    valueElement.textContent = formatNumber(value);
+
+    item.append(labelElement, valueElement);
+    list.append(item);
   });
 
   card.append(list);
@@ -947,82 +1370,80 @@ function createStationCard(station, template, tone, variant = "default") {
 }
 
 function createReferenceHeroCard(station) {
-  const card = createStationCardElement(station, "recommended", "hero");
-  const displayStatus = getDisplayStatus(station);
-  card.className = "station-card best-station-card hero-card";
-  card.innerHTML = `
-    <div class="best-station-burst" aria-hidden="true"></div>
-    <div class="best-station-body">
-      <div class="best-station-copy">
-        <span class="best-station-label badge-best">👑 الأفضل الآن</span>
-        <h3 class="best-station-title title"></h3>
-        <p class="station-card-status status-pill"></p>
-        ${createMetaRowMarkup("best-station-meta meta-row")}
-      </div>
-      <div class="best-station-icon icon-wrapper station-icon-wrap" aria-hidden="true">
-        <img src="/assets/gas-station.png" class="station-icon-img hero-icon" alt="" aria-hidden="true" />
-      </div>
-    </div>
-    <button type="button" class="best-station-cta cta-button station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
-      <span>افتح في خرائط Google</span>
-      <span class="station-card-action-icon" aria-hidden="true">⌖</span>
-    </button>
-    ${createFavoriteActionMarkup(station)}
-  `;
-
-  card.querySelector(".best-station-title").textContent = station.name;
-  fillStatus(card.querySelector(".station-card-status"), displayStatus);
-  fillMetaRow(card, station);
-  return card;
+  return createHeroCard(station);
 }
 
 function createReferenceBackupCard(station) {
-  const card = createStationCardElement(station, "backup", "backup");
-  const displayStatus = getDisplayStatus(station);
-  card.className = "station-card backup-station-card";
-  card.innerHTML = `
-    <div class="backup-station-copy">
-      <span class="backup-station-label">⭐ الخيار الثاني</span>
-      <h3 class="backup-station-title"></h3>
-      <p class="station-card-status"></p>
-      ${createMetaRowMarkup("backup-station-meta")}
-    </div>
-    <div class="backup-station-icon station-icon-wrap" aria-hidden="true">
-      ${createFuelIconMarkup()}
-    </div>
-    <button type="button" class="station-card-row-action station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
-      ${createChevronIconMarkup()}
-    </button>
-    ${createFavoriteActionMarkup(station)}
-  `;
+  return createCompactStationCard(station, "backup");
+}
 
-  card.querySelector(".backup-station-title").textContent = station.name;
-  fillStatus(card.querySelector(".station-card-status"), displayStatus);
+function createReferenceListCard(station, tone) {
+  return createCompactStationCard(station, tone);
+}
+
+function createHeroCard(station) {
+  const card = createStationCardElement(station, "recommended", "hero");
+  const statusLabel = getDisplayStatus(station);
+  card.className = "station-card best-station-card hero-card figma-hero-card";
+  card.innerHTML = `
+    <div class="figma-hero-head">
+      <div class="figma-hero-copy">
+        <span class="best-station-label badge-best badge-available">${statusLabel}</span>
+        <h3 class="best-station-title title"></h3>
+      </div>
+      <div class="figma-hero-icon-wrap" aria-hidden="true">
+        ${createHeroGoldIconMarkup()}
+      </div>
+    </div>
+    <div class="figma-hero-pills">
+      <span class="figma-hero-pill">
+        <span aria-hidden="true">📍</span>
+        <strong data-card-distance></strong>
+      </span>
+      <span class="figma-hero-pill">
+        <span aria-hidden="true">⏱</span>
+        <strong data-card-arrival></strong>
+      </span>
+    </div>
+  `;
+  card.querySelector(".best-station-title").textContent = station.name;
   fillMetaRow(card, station);
   return card;
 }
 
-function createReferenceListCard(station, tone) {
+function createCompactStationCard(station, tone) {
   const card = createStationCardElement(station, tone, "compact");
-  const displayStatus = getDisplayStatus(station);
-  card.className = "station-card nearby-station-row";
+  card.className = "station-card nearby-station-row figma-nearby-card";
+  card.dataset.stationStatus = station.status ?? "unknown";
+  card.setAttribute("aria-label", `${station.name} · ${getDisplayStatus(station)}`);
   card.innerHTML = `
-    <div class="nearby-station-icon station-icon-wrap" aria-hidden="true">
-      ${createFuelIconMarkup()}
+    <div class="nearby-station-info">
+      <div class="nearby-station-icon station-icon-wrap" aria-hidden="true">
+        ${createFuelIconMarkup()}
+      </div>
     </div>
     <div class="nearby-station-copy">
       <h3 class="nearby-station-title"></h3>
-      <p class="station-card-status"></p>
-      ${createMetaRowMarkup("nearby-station-meta")}
+      <div class="station-card-meta-row nearby-station-meta">
+        <span class="station-card-meta-item">
+          <span aria-hidden="true">📍</span>
+          <span data-card-distance></span>
+        </span>
+        <span class="station-card-meta-separator" aria-hidden="true">·</span>
+        <span class="station-card-meta-item">
+          <span aria-hidden="true">⏱</span>
+          <span data-card-arrival></span>
+        </span>
+      </div>
     </div>
-    <button type="button" class="station-card-row-action station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
-      ${createChevronIconMarkup()}
-    </button>
-    ${createFavoriteActionMarkup(station)}
+    <div class="station-card-side-actions">
+      <button type="button" class="station-card-row-action station-card-action-map" data-station-action="maps" aria-label="افتح في خرائط Google">
+        ${createChevronIconMarkup()}
+      </button>
+    </div>
   `;
 
   card.querySelector(".nearby-station-title").textContent = station.name;
-  fillStatus(card.querySelector(".station-card-status"), displayStatus);
   fillMetaRow(card, station);
   return card;
 }
@@ -1041,8 +1462,30 @@ function fillStatus(element, displayStatus) {
 }
 
 function fillMetaRow(card, station) {
-  card.querySelector("[data-card-distance]").textContent = formatDistanceLabel(station.distanceKm);
-  card.querySelector("[data-card-updated]").textContent = getStationUpdatedText(station);
+  const distance = card.querySelector("[data-card-distance]");
+  if (distance) {
+    distance.textContent = Number.isFinite(station.distanceKm) ? formatDistanceLabel(station.distanceKm) : "غير متاح";
+  }
+
+  const updated = card.querySelector("[data-card-updated]");
+  if (updated) {
+    updated.textContent = getStationUpdatedText(station);
+  }
+
+  const arrival = card.querySelector("[data-card-arrival]");
+  if (arrival) {
+    arrival.textContent = getEstimatedArrivalText(station);
+  }
+}
+
+function fillForecast(card, station) {
+  const forecast = predictCrowdStatus(station, new Date(), {
+    activeDevices: station.activeDevices,
+    activityLevel: station.activityLevel,
+  });
+
+  card.querySelector("[data-forecast-window]").textContent = forecast.bestTimeWindow;
+  card.querySelector("[data-forecast-status]").textContent = forecast.predictedStatus;
 }
 
 function createMetaRowMarkup(className) {
@@ -1061,8 +1504,27 @@ function createMetaRowMarkup(className) {
   `;
 }
 
+function createForecastMarkup(className) {
+  return `
+    <div class="station-card-forecast ${className}">
+      <span>
+        <strong>أفضل وقت للتعبئة</strong>
+        <span data-forecast-window></span>
+      </span>
+      <span>
+        <strong>توقع الزحمة</strong>
+        <span data-forecast-status></span>
+      </span>
+    </div>
+  `;
+}
+
 function createFuelIconMarkup() {
   return `<img src="/assets/gas-station.png" class="station-icon-img" alt="" aria-hidden="true" />`;
+}
+
+function createHeroGoldIconMarkup() {
+  return `<img src="/assets/gas-station.png" class="hero-gold-icon" alt="" aria-hidden="true" />`;
 }
 
 function createFavoriteActionMarkup(station) {
@@ -1093,10 +1555,14 @@ function getDisplayStatusTone(displayStatus) {
   }
 
   if (displayStatus === "زحمة") {
-    return "busy";
+    return "long";
   }
 
-  return "no_fuel";
+  if (displayStatus === "مسكر") {
+    return "closed";
+  }
+
+  return "light";
 }
 
 function updateMapActionButtons() {
@@ -1104,6 +1570,10 @@ function updateMapActionButtons() {
 }
 
 function renderStationDetails(station) {
+  if (station) {
+    assertEnrichedStations([station], "details-panel");
+  }
+
   if (!station) {
     stationEmpty.classList.remove("hidden");
     stationDetails.classList.add("hidden");
@@ -1120,7 +1590,7 @@ function renderStationDetails(station) {
 
   stationTitle.textContent = station.name;
   stationStatusBadge.textContent = getDisplayStatus(station);
-  stationStatusBadge.className = `status-badge ${STATUS_META[station.status].className}`;
+  stationStatusBadge.className = `status-badge ${(STATUS_META[station.status] ?? STATUS_META.unknown).className}`;
 
   detailsFields.distance.textContent = formatDistanceLabel(station.distanceKm);
   detailsFields.queue.textContent = getDriverFlowLabel(station);
@@ -1174,128 +1644,550 @@ function syncAreaFilter(areaOptions) {
 }
 
 function syncActiveTabUi() {
-  const isSearchTab = state.activeTab === "search";
+  const isMapTab = state.activeTab === "search";
   const isAccountTab = state.activeTab === "account";
+  const isHomeTab = state.activeTab === "home";
 
-  screenTitle.textContent = isAccountTab ? "حسابي" : isSearchTab ? "البحث" : "أقرب المحطات";
+  screenTitle.textContent = isAccountTab ? "حسابي" : isMapTab ? "الخريطة" : "أقرب المحطات";
   screenSubtitle.textContent = isAccountTab
     ? "إعدادات بسيطة للنموذج الأولي"
-    : isSearchTab
-      ? "ابحث عن المحطة أو المنطقة المناسبة"
+    : isMapTab
+      ? "اختر محطة من الخريطة وافتح الاتجاهات"
       : "اختر المحطة المناسبة وافتحها في خرائط Google";
-  listPanelHeading.classList.toggle("hidden", !isSearchTab && !isAccountTab);
-  homeInfoNotice.classList.toggle("hidden", isSearchTab || isAccountTab);
+  listPanelHeading.classList.toggle("hidden", isHomeTab);
+  homeInfoNotice?.classList.toggle("hidden", !isHomeTab);
+  mapPanel?.classList.toggle("home-screen-hidden", !isMapTab);
+  mapPanel?.toggleAttribute("hidden", !isMapTab);
+  mapPanel?.setAttribute("aria-hidden", isMapTab ? "false" : "true");
+  detailsPanel?.classList.toggle("home-screen-hidden", !isMapTab);
+  detailsPanel?.toggleAttribute("hidden", !isMapTab);
+  detailsPanel?.setAttribute("aria-hidden", isMapTab ? "false" : "true");
 
-  searchToolbar.classList.toggle("hidden", !isSearchTab);
-  if (!isSearchTab) {
+  searchToolbar.classList.toggle("hidden", !isMapTab);
+  if (!isMapTab) {
     searchPrompt.classList.add("hidden");
   }
 
-  bottomNavItems.forEach((item) => {
-    const isActive = item.dataset.tab === state.activeTab;
-    item.classList.toggle("active", isActive);
-    item.setAttribute("aria-current", isActive ? "page" : "false");
-  });
+  setBottomNavActiveState();
+}
 
-  if (bottomNav) {
-    bottomNav.dataset.activeTab = state.activeTab;
+function initDevPredictionPanel() {
+  if (!isDevPanelEnabled || !layout) {
+    return;
   }
+
+  const panel = createDevPredictionPanel();
+  layout.append(panel);
+  updateDevPredictionPanel(panel);
+  panel.addEventListener("input", () => {
+    updateDevPredictionPanel(panel);
+  });
+  panel.addEventListener("change", () => {
+    updateDevPredictionPanel(panel);
+  });
+}
+
+function createDevPredictionPanel() {
+  const panel = document.createElement("section");
+  panel.className = "panel dev-prediction-panel";
+  panel.dataset.devPanel = "prediction";
+  panel.innerHTML = `
+    <div class="panel-heading">
+      <div>
+        <p class="section-label">اختبار المطور</p>
+        <h2>محرك التوقع</h2>
+      </div>
+      <p class="panel-copy">هذا القسم يظهر فقط عند تفعيل ENABLE_DEV_PANEL.</p>
+    </div>
+    <div class="dev-prediction-grid">
+      <label>
+        <span>الأجهزة النشطة</span>
+        <input type="number" min="0" step="1" value="8" data-dev-input="activeDevices" />
+      </label>
+      <label>
+        <span>متوسط البقاء بالدقائق</span>
+        <input type="number" min="0" step="1" value="4" data-dev-input="averageDwellMinutes" />
+      </label>
+      <label>
+        <span>معدل الخروج السريع</span>
+        <input type="number" min="0" max="1" step="0.1" value="0" data-dev-input="bounceRate" />
+      </label>
+      <label>
+        <span>اليوم</span>
+        <select data-dev-input="dayOfWeek">
+          <option value="0">الأحد</option>
+          <option value="1" selected>الإثنين</option>
+          <option value="2">الثلاثاء</option>
+          <option value="3">الأربعاء</option>
+          <option value="4">الخميس</option>
+          <option value="5">الجمعة</option>
+          <option value="6">السبت</option>
+        </select>
+      </label>
+      <label>
+        <span>الساعة</span>
+        <input type="number" min="0" max="23" step="1" value="13" data-dev-input="hourOfDay" />
+      </label>
+    </div>
+    <div class="dev-prediction-result" aria-live="polite">
+      <div>
+        <span>النتيجة المتوقعة</span>
+        <strong data-dev-output="predictedStatus"></strong>
+      </div>
+      <div>
+        <span>الثقة</span>
+        <strong data-dev-output="confidence"></strong>
+      </div>
+    </div>
+    <div class="dev-signal-health" aria-live="polite">
+      <h3>فحص إشارات الحضور</h3>
+      <dl>
+        <div>
+          <dt>device_id</dt>
+          <dd data-dev-health="deviceId"></dd>
+        </div>
+        <div>
+          <dt>مصدر الموقع</dt>
+          <dd data-dev-health="locationSource"></dd>
+        </div>
+        <div>
+          <dt>أقرب محطة</dt>
+          <dd data-dev-health="nearestStation"></dd>
+        </div>
+        <div>
+          <dt>المسافة</dt>
+          <dd data-dev-health="nearestDistance"></dd>
+        </div>
+        <div>
+          <dt>آخر heartbeat</dt>
+          <dd data-dev-health="lastHeartbeat"></dd>
+        </div>
+        <div>
+          <dt>حالة heartbeat</dt>
+          <dd data-dev-health="heartbeatStatus"></dd>
+        </div>
+        <div>
+          <dt>خطأ Supabase</dt>
+          <dd data-dev-health="heartbeatError"></dd>
+        </div>
+      </dl>
+    </div>
+  `;
+
+  return panel;
+}
+
+function updateDevPredictionPanel(panel) {
+  const activeDevices = getDevPanelNumber(panel, "activeDevices");
+  const averageDwellMinutes = getDevPanelNumber(panel, "averageDwellMinutes");
+  const bounceRate = getDevPanelNumber(panel, "bounceRate");
+  const dayOfWeek = getDevPanelNumber(panel, "dayOfWeek");
+  const hourOfDay = getDevPanelNumber(panel, "hourOfDay");
+  const now = new Date();
+  const prediction = predictStationStatus(
+    {
+      activeDevices,
+      averageDwellMinutes,
+      bounceRate,
+      arrivalRate: activeDevices,
+      lastSignalAt: activeDevices > 0 ? now.toISOString() : null,
+    },
+    {
+      dayOfWeek,
+      hourOfDay,
+      now,
+    },
+  );
+
+  panel.querySelector("[data-dev-output='predictedStatus']").textContent = prediction.predictedStatus;
+  panel.querySelector("[data-dev-output='confidence']").textContent = prediction.confidenceLabelArabic;
+  updateDevSignalHealthPanel();
+}
+
+function getDevPanelNumber(panel, name) {
+  const value = Number(panel.querySelector(`[data-dev-input='${name}']`)?.value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function updateDevSignalHealthPanel() {
+  if (!isDevPanelEnabled) {
+    return;
+  }
+
+  const panel = document.querySelector("[data-dev-panel='prediction']");
+  if (!panel) {
+    return;
+  }
+
+  const setHealthText = (key, value) => {
+    const target = panel.querySelector(`[data-dev-health='${key}']`);
+    if (target) {
+      target.textContent = value;
+    }
+  };
+
+  setHealthText("deviceId", anonymousDeviceId);
+  setHealthText("locationSource", presenceSignalHealth.locationSource);
+  setHealthText("nearestStation", presenceSignalHealth.nearestStationName);
+  setHealthText(
+    "nearestDistance",
+    presenceSignalHealth.nearestStationDistanceKm == null
+      ? "غير متاح"
+      : `${formatNumber(Math.round(presenceSignalHealth.nearestStationDistanceKm * 1000))} متر`,
+  );
+  setHealthText(
+    "lastHeartbeat",
+    presenceSignalHealth.lastHeartbeatAt
+      ? formatRelativeTime(presenceSignalHealth.lastHeartbeatAt).replace("آخر تحديث: منذ", "منذ")
+      : "لا يوجد",
+  );
+  setHealthText(
+    "heartbeatStatus",
+    `${presenceSignalHealth.heartbeatStatus} · ${presenceSignalHealth.heartbeatReason}`,
+  );
+  setHealthText("heartbeatError", presenceSignalHealth.heartbeatError || "لا يوجد");
+}
+
+function updatePresenceSignalHealth(nextHealth) {
+  Object.assign(presenceSignalHealth, nextHealth);
+  updateDevSignalHealthPanel();
+}
+
+function logDevPresence(message, metadata = {}) {
+  if (!isDevPanelEnabled) {
+    return;
+  }
+
+  console.info(`[Dev Presence] ${message}`, metadata);
+}
+
+function getPresenceHeartbeatFailureReason(errorMessage = "") {
+  const normalizedError = errorMessage.toLowerCase();
+
+  if (normalizedError.includes("config")) {
+    return "Supabase غير مفعّل";
+  }
+
+  if (
+    normalizedError.includes("row-level") ||
+    normalizedError.includes("rls") ||
+    normalizedError.includes("policy") ||
+    normalizedError.includes("permission")
+  ) {
+    return "غالباً RLS تمنع الإدخال";
+  }
+
+  return "لم يتم حفظ الإشارة في station_presence";
 }
 
 function toggleStationFavorite(stationId) {
-  const station = latestProjectedStations.find((item) => item.id === stationId)
-    ?? stations.find((item) => item.id === stationId);
+  const station = latestEnrichedStations.find((item) => item.id === stationId);
   if (!station) {
+    console.error("[DataFlow] Favorite action attempted without enriched station data", { stationId });
     return;
   }
 
   const { isFavorite } = toggleFavoriteStation(station);
+  trackEvent(isFavorite ? "favorite_added" : "favorite_removed", {
+    stationId: station.id,
+    stationName: station.name,
+  });
   showSuccessToast(isFavorite ? "تم حفظ المحطة" : "تم إزالة المحطة من المفضلة");
   render();
 }
 
 function openStationInGoogleMaps(stationId) {
-  const station = latestProjectedStations.find((item) => item.id === stationId)
-    ?? stations.find((item) => item.id === stationId);
+  const station = latestEnrichedStations.find((item) => item.id === stationId);
   if (!station) {
+    console.error("[DataFlow] Maps action attempted without enriched station data", { stationId });
     return;
   }
 
   saveRecentStation(station);
-  window.open(getGoogleMapsUrl(station), "_blank", "noopener");
+  trackEvent("station_opened_google_maps", {
+    stationId: station.id,
+    stationName: station.name,
+  });
+  const mapsUrl = getGoogleMapsDirectionsUrl(
+    station,
+    state.hasUserLocation ? state.userLocation : null,
+  );
+  window.open(mapsUrl, "_blank", "noopener");
   showSuccessToast("تم فتح الخريطة. رحلة موفقة");
 }
 
 function hydrateLocation() {
   const locationModeConfig = getLocationModeConfig();
+  const devLocationOverride = getDevLocationOverrideConfig(
+    import.meta.env ?? {},
+    window,
+    DEV_LOCATION_OVERRIDE,
+  );
+  state.isLocatingUser = true;
+  state.locationState = LOCATION_STATES.gpsLoading;
+  state.locationFailureReason = "";
+  locationBanner.textContent = "جاري تحديد موقعك...";
+  void logGpsPermissionStatus();
+
+  if (devLocationOverride.enabled && devLocationOverride.hasValidLocation) {
+    applyResolvedLocation({
+      latitude: devLocationOverride.latitude,
+      longitude: devLocationOverride.longitude,
+      source: "dev_override",
+      isGps: true,
+      locationBannerText: "وضع المطور: يتم استخدام موقع اختبار ثابت.",
+    });
+    console.info("Location source: dev_override", {
+      latitude: devLocationOverride.latitude,
+      longitude: devLocationOverride.longitude,
+    });
+    safeStartPresenceHeartbeat();
+    render();
+    return;
+  }
+
+  if (devLocationOverride.enabled && !devLocationOverride.hasValidLocation) {
+    applyFallbackLocation("invalid_dev_location_override", "إحداثيات وضع المطور غير صالحة");
+    stopPresenceHeartbeat();
+    console.warn("Location source: fallback_tripoli_invalid_dev_override", {
+      latitude: devLocationOverride.latitude,
+      longitude: devLocationOverride.longitude,
+    });
+    render();
+    return;
+  }
 
   if (locationModeConfig.useFakeLocation) {
     if (locationModeConfig.hasValidFakeLocation) {
-      state.userLocation = {
+      applyResolvedLocation({
         latitude: locationModeConfig.latitude,
         longitude: locationModeConfig.longitude,
-      };
-      state.hasUserLocation = true;
-      state.shouldCenterUserOnMap = true;
-      state.didAutoFocusBestStation = false;
-      locationBanner.textContent = "وضع الاختبار: يتم استخدام موقع وهمي";
+        source: "dev_override",
+        isGps: true,
+        locationBannerText: "وضع الاختبار: يتم استخدام موقع وهمي",
+      });
+      updatePresenceSignalHealth({
+        locationSource: "fake",
+        heartbeatStatus: "disabled",
+        heartbeatReason: "ينتظر أول إرسال",
+        heartbeatError: "",
+      });
+      logDevPresence("location source", { source: "fake" });
+      logDevPresence("location fetched", {
+        source: "fake",
+        latitude: state.userLocation.latitude,
+        longitude: state.userLocation.longitude,
+      });
       safeStartPresenceHeartbeat();
       render();
       return;
     }
 
-    state.userLocation = tripoliCenter;
-    state.hasUserLocation = false;
+    applyFallbackLocation("invalid_fake_location", "إحداثيات الاختبار غير صالحة");
     stopPresenceHeartbeat();
-    locationBanner.textContent = "وضع الاختبار: الإحداثيات الوهمية غير صالحة، يتم استخدام وسط طرابلس.";
+    updatePresenceSignalHealth({
+      locationSource: "fallback_tripoli_invalid_fake_location",
+      nearestStationName: "غير متاح",
+      nearestStationDistanceKm: null,
+      heartbeatStatus: "disabled",
+      heartbeatReason: "إحداثيات الاختبار غير صالحة",
+      heartbeatError: "Invalid fake location coordinates.",
+    });
+    logDevPresence("location source", { source: "fallback_tripoli_invalid_fake_location" });
     render();
     return;
   }
 
   if (window.location.protocol === "file:") {
-    state.hasUserLocation = false;
+    applyFallbackLocation("file_protocol", "التطبيق مفتوح عبر file://");
     stopPresenceHeartbeat();
-    locationBanner.textContent = "شغّل التطبيق من localhost حتى يعمل طلب الموقع في المتصفح.";
+    updatePresenceSignalHealth({
+      locationSource: "disabled_file_protocol",
+      nearestStationName: "غير متاح",
+      nearestStationDistanceKm: null,
+      heartbeatStatus: "disabled",
+      heartbeatReason: "التطبيق مفتوح عبر file://",
+      heartbeatError: "Location is disabled on file://. Use localhost.",
+    });
+    logDevPresence("location source", { source: "disabled_file_protocol" });
     render();
     return;
   }
 
   if (!("geolocation" in navigator)) {
+    applyFallbackLocation("no_geolocation_support", "Geolocation API unavailable.");
     stopPresenceHeartbeat();
-    locationBanner.textContent = "الموقع غير متاح في هذا المتصفح. يتم استخدام وسط طرابلس كموقع افتراضي.";
+    updatePresenceSignalHealth({
+      locationSource: "fallback_tripoli_no_geolocation",
+      nearestStationName: "غير متاح",
+      nearestStationDistanceKm: null,
+      heartbeatStatus: "disabled",
+      heartbeatReason: "المتصفح لا يدعم الموقع",
+      heartbeatError: "Geolocation API unavailable.",
+    });
+    logDevPresence("location source", { source: "fallback_tripoli_no_geolocation" });
     render();
     return;
   }
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      state.userLocation = {
+      applyResolvedLocation({
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
-      };
-      state.hasUserLocation = true;
-      state.shouldCenterUserOnMap = true;
-      state.didAutoFocusBestStation = false;
-      locationBanner.textContent = "تم تحديد موقعك الحالي. يتم ترتيب المحطات وعرض موقعك على الخريطة.";
+        source: "gps",
+        isGps: true,
+        locationBannerText: "تم تحديد موقعك الحالي. يتم ترتيب المحطات وعرض موقعك على الخريطة.",
+      });
+      if (isRouteMetricsDevLoggingEnabled()) {
+        console.info("[GPS] user location", {
+          latitude: state.userLocation.latitude,
+          longitude: state.userLocation.longitude,
+          defaultLocationUsed: false,
+        });
+      }
+      console.info("[GPS] success", {
+        source: "gps",
+        accuracyMeters: position.coords.accuracy,
+      });
+      updatePresenceSignalHealth({
+        locationSource: "browser_geolocation",
+        heartbeatStatus: "disabled",
+        heartbeatReason: "ينتظر أول إرسال",
+        heartbeatError: "",
+      });
+      logDevPresence("location source", { source: "browser_geolocation" });
+      logDevPresence("location fetched", {
+        source: "browser_geolocation",
+        latitude: state.userLocation.latitude,
+        longitude: state.userLocation.longitude,
+        accuracyMeters: position.coords.accuracy,
+      });
       safeStartPresenceHeartbeat();
       render();
     },
-    () => {
-      state.hasUserLocation = false;
+    (error) => {
+      const failureReason = resolveGeolocationErrorReason(error);
+      state.locationState = LOCATION_STATES.gpsFailed;
+      state.locationFailureReason = failureReason;
+      if (isRouteMetricsDevLoggingEnabled()) {
+        console.warn("[GPS] failure", {
+          reason: failureReason,
+          errorCode: error?.code ?? null,
+          errorMessage: error?.message ?? null,
+        });
+      }
+      applyFallbackLocation("gps_failure", failureReason);
       stopPresenceHeartbeat();
-      locationBanner.textContent = "تم رفض إذن الموقع. يتم استخدام وسط طرابلس كموقع افتراضي.";
+      updatePresenceSignalHealth({
+        locationSource: "fallback_tripoli_permission_denied",
+        nearestStationName: "غير متاح",
+        nearestStationDistanceKm: null,
+      heartbeatStatus: "disabled",
+      heartbeatReason: "تم رفض إذن الموقع",
+      heartbeatError: "Location permission denied.",
+    });
+      logDevPresence("location source", { source: "fallback_tripoli_permission_denied" });
       render();
     },
     {
       enableHighAccuracy: true,
-      timeout: 6000,
-      maximumAge: 300000,
+      timeout: 10000,
+      maximumAge: 0,
     },
   );
 }
 
 function getSelectedStation() {
-  return stations.find((station) => station.id === state.selectedStationId) ?? null;
+  return (
+    latestEnrichedStations.find((station) => station.id === state.selectedStationId) ??
+    stations.find((station) => station.id === state.selectedStationId) ??
+    null
+  );
+}
+
+function applyResolvedLocation({
+  latitude,
+  longitude,
+  source,
+  isGps,
+  locationBannerText,
+}) {
+  state.realUserLocation = {
+    latitude,
+    longitude,
+  };
+  state.userLocation = state.realUserLocation;
+  state.hasUserLocation = Boolean(isGps);
+  state.isLocatingUser = false;
+  state.locationState = LOCATION_STATES.gpsSuccess;
+  state.locationSource = source;
+  state.shouldCenterUserOnMap = true;
+  state.didAutoFocusBestStation = false;
+  locationBanner.textContent = locationBannerText;
+}
+
+function applyFallbackLocation(reasonCode, reasonMessage = "") {
+  state.realUserLocation = null;
+  state.userLocation = fallbackTripoliLocation;
+  state.hasUserLocation = false;
+  state.isLocatingUser = false;
+  state.locationState = LOCATION_STATES.fallbackUsed;
+  state.locationSource = "fallback_tripoli_center";
+  state.locationFailureReason = reasonMessage || reasonCode;
+  locationBanner.textContent = "لم نتمكن من تحديد موقعك، يتم عرض محطات قريبة من وسط طرابلس.";
+  console.warn("Using fallback Tripoli center — distances are approximate", {
+    source: state.locationSource,
+    reason: reasonMessage || reasonCode,
+    latitude: fallbackTripoliLocation.latitude,
+    longitude: fallbackTripoliLocation.longitude,
+  });
+}
+
+async function logGpsPermissionStatus() {
+  if (!navigator.permissions?.query) {
+    state.gpsPermissionStatus = "unsupported";
+    if (isRouteMetricsDevLoggingEnabled()) {
+      console.info("[GPS] permission status", {
+        status: state.gpsPermissionStatus,
+      });
+    }
+    return;
+  }
+
+  try {
+    const permissionState = await navigator.permissions.query({ name: "geolocation" });
+    state.gpsPermissionStatus = permissionState.state;
+    if (isRouteMetricsDevLoggingEnabled()) {
+      console.info("[GPS] permission status", {
+        status: permissionState.state,
+      });
+    }
+  } catch (error) {
+    state.gpsPermissionStatus = "unknown";
+    if (isRouteMetricsDevLoggingEnabled()) {
+      console.warn("[GPS] permission status unavailable", {
+        error: error?.message ?? "unknown",
+      });
+    }
+  }
+}
+
+function resolveGeolocationErrorReason(error) {
+  if (!error) {
+    return "unknown_geolocation_error";
+  }
+
+  if (error.code === 1) {
+    return "permission_denied";
+  }
+  if (error.code === 2) {
+    return "position_unavailable";
+  }
+  if (error.code === 3) {
+    return "timeout";
+  }
+  return error.message || "unknown_geolocation_error";
 }
 
 function openReportModal() {
@@ -1362,6 +2254,14 @@ function getDriverFlowLabel(station) {
   return getDisplayStatus(station);
 }
 
+function getEstimatedArrivalText(station) {
+  if (!Number.isFinite(station?.etaMinutes)) {
+    return "الوصول غير متاح";
+  }
+
+  return `الوصول خلال ${formatNumber(station.etaMinutes)} دقائق`;
+}
+
 function getDriverTrustLabel(station) {
   if (station.confidenceLevel === "high") {
     return "واضحة";
@@ -1374,8 +2274,9 @@ function getDriverTrustLabel(station) {
   return "خفيفة";
 }
 
-function processStationNotifications(projectedStations, now = new Date()) {
-  const nextStatusById = new Map(projectedStations.map((station) => [station.id, station.status]));
+function processStationNotifications(enrichedStations, now = new Date()) {
+  assertEnrichedStations(enrichedStations, "notifications");
+  const nextStatusById = new Map(enrichedStations.map((station) => [station.id, station.status]));
 
   if (!hasStatusHistory) {
     previousStationStatusById = nextStatusById;
@@ -1383,7 +2284,7 @@ function processStationNotifications(projectedStations, now = new Date()) {
     return;
   }
 
-  projectedStations.forEach((station) => {
+  enrichedStations.forEach((station) => {
     const previousStatus = previousStationStatusById.get(station.id);
     if (!shouldNotifyAvailabilityChange(previousStatus, station.status)) {
       return;
@@ -1417,30 +2318,112 @@ function renderEnvironmentWarning() {
   environmentWarning.classList.remove("hidden");
 }
 
+function ensureGoogleMapsLoaded() {
+  if (window.google?.maps) {
+    return Promise.resolve();
+  }
+  if (mapState.apiLoaderPromise) {
+    return mapState.apiLoaderPromise;
+  }
+
+  const apiKey = resolveGoogleMapsApiKey(import.meta.env ?? {}, globalThis.BENZINA_CONFIG ?? {}).trim();
+  if (!apiKey) {
+    return Promise.reject(new Error("GOOGLE_MAPS_API_KEY is missing"));
+  }
+
+  mapState.apiLoaderPromise = new Promise((resolve, reject) => {
+    const callbackName = `__shaleMapsReady_${Date.now()}`;
+    window[callbackName] = () => {
+      delete window[callbackName];
+      resolve();
+    };
+
+    const script = document.createElement("script");
+    script.src =
+      `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&language=ar&region=LY&callback=${callbackName}`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => {
+      delete window[callbackName];
+      mapState.apiLoaderPromise = null;
+      reject(new Error("Failed to load Google Maps script"));
+    };
+    document.head.append(script);
+  });
+
+  return mapState.apiLoaderPromise;
+}
+
+function getStationPinColor(station) {
+  if (station.status === "available") {
+    return "#16a34a";
+  }
+  if (station.status === "busy" || station.status === "crowded") {
+    return "#eab308";
+  }
+  if (station.status === "no_fuel") {
+    return "#ef4444";
+  }
+  return "#9ca3af";
+}
+
+function renderMapStationBottomSheet(station) {
+  if (!stationMap) {
+    return;
+  }
+
+  let sheet = stationMap.querySelector(".map-station-sheet");
+  if (!sheet) {
+    sheet = document.createElement("article");
+    sheet.className = "map-station-sheet";
+    stationMap.append(sheet);
+  }
+
+  const distanceText = Number.isFinite(station.distanceKm) ? formatDistanceLabel(station.distanceKm) : "غير متاح";
+  const etaText = getEstimatedArrivalText(station);
+  const statusText = getDisplayStatus(station);
+
+  sheet.innerHTML = `
+    <h3 class="map-station-sheet-title">${station.name}</h3>
+    <p class="map-station-sheet-meta">${distanceText} · ${etaText}</p>
+    <p class="map-station-sheet-status">${statusText}</p>
+    <button type="button" class="map-station-sheet-action" data-map-direction-button="true">الاتجاهات</button>
+  `;
+
+  const directionButton = sheet.querySelector("[data-map-direction-button='true']");
+  directionButton?.addEventListener("click", () => {
+    const url = getGoogleMapsDirectionsUrl(
+      station,
+      state.hasUserLocation ? state.userLocation : null,
+    );
+    window.open(url, "_blank", "noopener");
+  });
+}
+
 function ensureMap() {
   if (mapState.instance) {
     return;
   }
 
-  const leaflet = window.L;
-  if (!leaflet || !stationMap) {
+  if (!stationMap) {
     mapFocusPill.textContent = "تعذر تحميل الخريطة الآن";
     return;
   }
 
-  mapState.instance = leaflet.map(stationMap, {
-    center: [tripoliCenter.latitude, tripoliCenter.longitude],
-    zoom: 11,
-    zoomControl: true,
-  });
+  if (!window.google?.maps) {
+    mapFocusPill.textContent = "تعذر تحميل Google Maps";
+    return;
+  }
 
-  leaflet
-    .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    })
-    .addTo(mapState.instance);
+  mapState.instance = new window.google.maps.Map(stationMap, {
+    center: { lat: fallbackTripoliLocation.latitude, lng: fallbackTripoliLocation.longitude },
+    zoom: 11,
+    disableDefaultUI: false,
+    streetViewControl: false,
+    mapTypeControl: false,
+    fullscreenControl: false,
+  });
+  mapState.infoWindow = new window.google.maps.InfoWindow();
 }
 
 function syncUserMarker() {
@@ -1449,71 +2432,76 @@ function syncUserMarker() {
   }
 
   if (!state.hasUserLocation) {
-    mapState.userMarker?.remove();
+    mapState.userMarker?.setMap(null);
     mapState.userMarker = null;
     return;
   }
 
   if (!mapState.userMarker) {
-    mapState.userMarker = window.L.circleMarker(
-      [state.userLocation.latitude, state.userLocation.longitude],
-      {
-        radius: 8,
-        color: "#ffffff",
-        weight: 3,
+    mapState.userMarker = new window.google.maps.Marker({
+      map: mapState.instance,
+      position: { lat: state.userLocation.latitude, lng: state.userLocation.longitude },
+      title: "موقعك الحالي",
+      icon: {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale: 8,
         fillColor: "#1f7aec",
         fillOpacity: 1,
+        strokeColor: "#ffffff",
+        strokeWeight: 3,
       },
-    )
-      .bindTooltip("موقعك الحالي", {
-        direction: "top",
-        offset: [0, -10],
-      })
-      .addTo(mapState.instance);
+      zIndex: 2000,
+    });
     return;
   }
 
-  mapState.userMarker.setLatLng([state.userLocation.latitude, state.userLocation.longitude]);
+  mapState.userMarker.setPosition({
+    lat: state.userLocation.latitude,
+    lng: state.userLocation.longitude,
+  });
 }
 
-function syncMapMarkers(projectedStations, bestStation) {
+function syncMapMarkers(enrichedStations, bestStation) {
   if (!mapState.instance) {
     return;
   }
 
   clearMapMarkers();
 
-  projectedStations.forEach((station) => {
-    const markerEmphasis = bestStation?.id === station.id ? "best" : "dim";
-    const marker = window.L.marker([station.latitude, station.longitude], {
-      icon: window.L.divIcon({
-        className: getLeafletMarkerClass(
-          station.status,
-          station.id === state.selectedStationId,
-          markerEmphasis,
-        ),
-        html: "<span></span>",
-        iconSize: [22, 22],
-        iconAnchor: [11, 11],
-      }),
-      keyboard: false,
-    }).addTo(mapState.instance);
+  assertEnrichedStations(enrichedStations, "map-markers");
 
-    marker.on("click", () => {
-      selectStation(station.id, {
-        centerMap: true,
-        showDetails: true,
-        showCard: true,
-      });
+  enrichedStations.forEach((station) => {
+    const marker = new window.google.maps.Marker({
+      map: mapState.instance,
+      position: { lat: station.latitude, lng: station.longitude },
+      title: station.name,
+      icon: {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale: bestStation?.id === station.id ? 9 : 7,
+        fillColor: getStationPinColor(station),
+        fillOpacity: 1,
+        strokeColor: station.id === state.selectedStationId ? "#111827" : "#ffffff",
+        strokeWeight: station.id === state.selectedStationId ? 3 : 2,
+      },
+      zIndex: station.id === state.selectedStationId ? 1200 : 1000,
     });
 
-    mapState.markers.push(marker);
+    marker.addListener("click", () => {
+      selectStation(station.id, {
+        centerMap: true,
+        showDetails: state.activeTab === "search",
+        showCard: state.activeTab !== "search",
+      });
+      renderMapStationBottomSheet(station);
+    });
+
+    mapState.markersByStationId.set(station.id, marker);
   });
 }
 
 function clearMapMarkers() {
-  mapState.markers.forEach((marker) => marker.remove());
-  mapState.markers = [];
+  mapState.markersByStationId.forEach((marker) => marker.setMap(null));
+  mapState.markersByStationId = new Map();
 }
 
 function centerMapOn(location, zoom) {
@@ -1521,10 +2509,11 @@ function centerMapOn(location, zoom) {
     return;
   }
 
-  mapState.instance.flyTo([location.latitude, location.longitude], zoom, {
-    animate: true,
-    duration: 0.7,
+  mapState.instance.panTo({
+    lat: location.latitude,
+    lng: location.longitude,
   });
+  mapState.instance.setZoom(zoom);
 }
 
 function revealSelection({ showDetails = false, showCard = false } = {}) {
@@ -1548,7 +2537,7 @@ function revealSelection({ showDetails = false, showCard = false } = {}) {
 }
 
 function selectStation(stationId, { centerMap = false, showDetails = false, showCard = false } = {}) {
-  const nextStationId = resolveSelectedStationId(stationId, latestProjectedStations);
+  const nextStationId = resolveSelectedStationId(stationId, latestEnrichedStations);
   if (!nextStationId || nextStationId !== stationId) {
     return;
   }
@@ -1560,6 +2549,10 @@ function selectStation(stationId, { centerMap = false, showDetails = false, show
 }
 
 function scheduleDemoUpdate() {
+  if (!isDevPanelEnabled) {
+    window.clearTimeout(demoUpdateTimerId);
+    return;
+  }
   window.clearTimeout(demoUpdateTimerId);
   demoUpdateTimerId = window.setTimeout(() => {
     applyDemoUpdate();
@@ -1599,6 +2592,10 @@ function getAllReports() {
 
 function startPresenceHeartbeat() {
   if (!state.hasUserLocation) {
+    updatePresenceSignalHealth({
+      heartbeatStatus: "disabled",
+      heartbeatReason: "الموقع غير مفعل",
+    });
     return;
   }
 
@@ -1616,28 +2613,117 @@ function stopPresenceHeartbeat() {
 
 async function sendPresenceHeartbeat() {
   if (!state.hasUserLocation) {
+    updatePresenceSignalHealth({
+      heartbeatStatus: "disabled",
+      heartbeatReason: "الموقع غير مفعل",
+    });
     return;
   }
 
   try {
+    const nearestDetectedStation = findNearestStationWithinDistance(
+      state.userLocation,
+      stations,
+      Number.POSITIVE_INFINITY,
+    );
     const nearestStation = findNearestStationWithinDistance(state.userLocation, stations);
     if (!nearestStation) {
+      updatePresenceSignalHealth({
+        nearestStationName: nearestDetectedStation?.station.name ?? "لا توجد محطات",
+        nearestStationDistanceKm: nearestDetectedStation?.distanceKm ?? null,
+        heartbeatStatus: "disabled",
+        heartbeatReason: "لا توجد محطة قريبة بما يكفي",
+        heartbeatError: "User is farther than 200 meters from the nearest station.",
+      });
+      logDevPresence("nearest station", {
+        station: nearestDetectedStation?.station.name ?? null,
+        distanceMeters: nearestDetectedStation ? Math.round(nearestDetectedStation.distanceKm * 1000) : null,
+      });
+      logDevPresence("heartbeat failed reason", { reason: "no station within 200 meters" });
       presenceRows = await repository.getRecentPresence();
       render();
       return;
     }
 
-    await repository.submitPresenceHeartbeat({
+    updatePresenceSignalHealth({
+      nearestStationName: nearestStation.station.name,
+      nearestStationDistanceKm: nearestStation.distanceKm,
+      heartbeatStatus: "disabled",
+      heartbeatReason: "جاري الإرسال",
+    });
+    logDevPresence("nearest station", {
+      station: nearestStation.station.name,
+      distanceMeters: Math.round(nearestStation.distanceKm * 1000),
+    });
+
+    const heartbeatTime = new Date().toISOString();
+    const heartbeatPayload = {
       stationId: nearestStation.station.id,
       deviceId: anonymousDeviceId,
       latitude: state.userLocation.latitude,
       longitude: state.userLocation.longitude,
       distanceToStationMeters: Math.round(nearestStation.distanceKm * 1000),
-      lastSeenAt: new Date().toISOString(),
+      lastSeenAt: heartbeatTime,
+    };
+    logDevPresence("heartbeat payload", {
+      table: "station_presence",
+      payload: {
+        station_id: heartbeatPayload.stationId,
+        device_id: heartbeatPayload.deviceId,
+        last_seen_at: heartbeatPayload.lastSeenAt,
+        distance_to_station_meters: heartbeatPayload.distanceToStationMeters,
+      },
     });
+    const heartbeatResult = await repository.submitPresenceHeartbeat(
+      heartbeatPayload,
+      { detailedResult: isDevPanelEnabled },
+    );
+    const heartbeatSucceeded = isDevPanelEnabled ? heartbeatResult?.ok === true : Boolean(heartbeatResult);
+
+    if (heartbeatSucceeded) {
+      updatePresenceSignalHealth({
+        lastHeartbeatAt: heartbeatTime,
+        heartbeatStatus: "success",
+        heartbeatReason: "تم إرسال الإشارة",
+        heartbeatError: "",
+      });
+      logDevPresence("heartbeat sent", {
+        table: "station_presence",
+        station: nearestStation.station.name,
+        deviceId: anonymousDeviceId,
+      });
+      logDevPresence("heartbeat response", {
+        status: "success",
+        response: isDevPanelEnabled ? heartbeatResult : "saved",
+      });
+    } else {
+      const heartbeatError = isDevPanelEnabled
+        ? heartbeatResult?.error ?? "Unknown heartbeat failure."
+        : "Repository returned no saved heartbeat.";
+      updatePresenceSignalHealth({
+        heartbeatStatus: "failed",
+        heartbeatReason: getPresenceHeartbeatFailureReason(heartbeatError),
+        heartbeatError,
+      });
+      logDevPresence("heartbeat failed reason", {
+        reason: heartbeatError,
+        station: nearestStation.station.name,
+      });
+      logDevPresence("heartbeat response", {
+        status: "error",
+        error: heartbeatError,
+      });
+    }
+
     presenceRows = await repository.getRecentPresence();
     render();
-  } catch {
+  } catch (error) {
+    updatePresenceSignalHealth({
+      heartbeatStatus: "failed",
+      heartbeatReason: "حدث خطأ أثناء إرسال الإشارة",
+      heartbeatError: error?.message ?? "unknown error",
+    });
+    logDevPresence("heartbeat failed reason", { reason: error?.message ?? "unknown error" });
     presenceRows = [];
     render();
   }
@@ -1657,10 +2743,20 @@ function safeHydrateLocation() {
   try {
     hydrateLocation();
   } catch {
-    state.userLocation = tripoliCenter;
+    state.realUserLocation = null;
+    state.userLocation = fallbackTripoliLocation;
     state.hasUserLocation = false;
+    state.isLocatingUser = false;
     stopPresenceHeartbeat();
-    locationBanner.textContent = "تعذر تهيئة الموقع الآن. يتم استخدام وسط طرابلس.";
+    locationBanner.textContent = "لم نتمكن من تحديد موقعك، يتم عرض محطات قريبة من وسط طرابلس.";
+    updatePresenceSignalHealth({
+      locationSource: "fallback_tripoli_location_error",
+      nearestStationName: "غير متاح",
+      nearestStationDistanceKm: null,
+      heartbeatStatus: "disabled",
+      heartbeatReason: "تعذر تهيئة الموقع",
+    });
+    logDevPresence("location source", { source: "fallback_tripoli_location_error" });
     render();
   }
 }
@@ -1668,7 +2764,12 @@ function safeHydrateLocation() {
 function safeStartPresenceHeartbeat() {
   try {
     startPresenceHeartbeat();
-  } catch {
+  } catch (error) {
+    updatePresenceSignalHealth({
+      heartbeatStatus: "failed",
+      heartbeatReason: "تعذر تشغيل heartbeat",
+    });
+    logDevPresence("heartbeat failed reason", { reason: error?.message ?? "startup failed" });
     stopPresenceHeartbeat();
   }
 }

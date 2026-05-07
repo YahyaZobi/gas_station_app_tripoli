@@ -40,6 +40,64 @@ export function getLocationModeConfig(runtimeEnv = import.meta.env ?? {}, browse
   };
 }
 
+export function getDevLocationOverrideConfig(
+  runtimeEnv = import.meta.env ?? {},
+  browserWindow = globalThis,
+  defaults = {},
+) {
+  const browserConfig = browserWindow?.BENZINA_CONFIG ?? {};
+  const nestedConfig = browserConfig.DEV_LOCATION_OVERRIDE ?? {};
+  const enabled = parseBooleanConfig(
+    nestedConfig.enabled ??
+      nestedConfig.ENABLED ??
+      browserConfig.DEV_LOCATION_OVERRIDE_ENABLED ??
+      runtimeEnv.DEV_LOCATION_OVERRIDE_ENABLED ??
+      runtimeEnv.VITE_DEV_LOCATION_OVERRIDE_ENABLED ??
+      defaults.enabled ??
+      false,
+  );
+  const latitude = parseNumberConfig(
+    nestedConfig.latitude ??
+      nestedConfig.lat ??
+      browserConfig.DEV_LOCATION_OVERRIDE_LATITUDE ??
+      runtimeEnv.DEV_LOCATION_OVERRIDE_LATITUDE ??
+      runtimeEnv.VITE_DEV_LOCATION_OVERRIDE_LATITUDE ??
+      defaults.latitude ??
+      null,
+  );
+  const longitude = parseNumberConfig(
+    nestedConfig.longitude ??
+      nestedConfig.lng ??
+      browserConfig.DEV_LOCATION_OVERRIDE_LONGITUDE ??
+      runtimeEnv.DEV_LOCATION_OVERRIDE_LONGITUDE ??
+      runtimeEnv.VITE_DEV_LOCATION_OVERRIDE_LONGITUDE ??
+      defaults.longitude ??
+      null,
+  );
+
+  return {
+    enabled,
+    hasValidLocation: Number.isFinite(latitude) && Number.isFinite(longitude),
+    latitude,
+    longitude,
+  };
+}
+
+export function getDevPanelConfig(runtimeEnv = import.meta.env ?? {}, browserWindow = globalThis) {
+  const browserConfig = browserWindow?.BENZINA_CONFIG ?? {};
+  const enableDevPanel = parseBooleanConfig(
+    browserConfig.ENABLE_DEV_PANEL ??
+      runtimeEnv.ENABLE_DEV_PANEL ??
+      runtimeEnv.VITE_ENABLE_DEV_PANEL ??
+      browserWindow.ENABLE_DEV_PANEL ??
+      false,
+  );
+
+  return {
+    enableDevPanel,
+  };
+}
+
 function parseBooleanConfig(value) {
   if (typeof value === "boolean") {
     return value;
