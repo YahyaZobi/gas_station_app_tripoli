@@ -178,6 +178,11 @@ let successToastTimerId = null;
 let latestProjectedStations = [];
 let hasStatusHistory = false;
 let previousStationStatusById = new Map();
+// homeListBuildKey: changes only when GPS is first obtained or radius expands.
+// lockedHomeLayout: station IDs in the order of the first render. Used to
+// rebuild the DOM (e.g. after a tab switch) without re-sorting.
+let homeListBuildKey = null;
+let lockedHomeLayout = null; // { heroId, backupId, nearbyIds[], otherIds[] }
 const anonymousDeviceId = getAnonymousDeviceId();
 
 renderEnvironmentWarning();
@@ -362,7 +367,8 @@ async function handleRealtimeInsert() {
   } catch {
     presenceRows = [];
   }
-  state.didAutoFocusBestStation = false;
+  // Do NOT reset didAutoFocusBestStation — that would force the hero card
+  // to re-evaluate and potentially move on every incoming report.
   render();
   showSuccessToast("تم وصول بلاغ جديد");
 }
@@ -449,6 +455,7 @@ function render() {
     searchResults: searchedStations,
     hasSearch,
     canExpandRadius,
+    projectedStations,
   });
   renderStationDetails(projectedStations.find((station) => station.id === state.selectedStationId));
 }
@@ -493,13 +500,14 @@ function renderMap(projectedStations, bestStation) {
   mapFocusPill.textContent = `${selectedStation.name} · ${getDisplayStatus(selectedStation)}`;
 }
 
-function renderStationList({ stationSections, searchResults, hasSearch, canExpandRadius = false }) {
-  stationList.innerHTML = "";
+function renderStationList({ stationSections, searchResults, hasSearch, canExpandRadius = false, projectedStations = [] }) {
   searchPrompt.classList.add("hidden");
   const template = document.querySelector("#station-card-template");
   const { bestStation, recommendedStations, nearbyStations, avoidStations } = stationSections;
 
+  // ── Non-home tabs: always wipe and rebuild (search/account have their own order) ──
   if (state.activeTab === "account") {
+    stationList.innerHTML = "";
     renderAccountScreen();
     listEmpty.classList.add("hidden");
     showMoreButton.classList.add("hidden");
@@ -507,16 +515,65 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
   }
 
   if (state.activeTab === "search") {
-    renderSearchResults({
-      stations: searchResults,
-      hasSearch,
-      template,
-    });
+    stationList.innerHTML = "";
+    renderSearchResults({ stations: searchResults, hasSearch, template });
     showMoreButton.classList.add("hidden");
     return;
   }
 
-  const layout = buildDecisionFirstLayout({
+  // ── Home tab ─────────────────────────────────────────────────────────────
+  //
+  // Sorting happens ONCE.  The build key only changes on two events:
+  //   • GPS is first obtained  (hasUserLocation false → true)
+  //   • The user expands the discovery radius
+  // Every other render call (realtime insert, demo tick, heartbeat, report
+  // submit, tab-switch back to home) must preserve the card order exactly.
+  //
+  // Three paths:
+  //   1. buildKey changed          → fresh sort, save locked order, build DOM
+  //   2. Cards already in DOM      → patch data only (no DOM restructuring)
+  //   3. DOM empty + locked order  → rebuild in saved order, then patch data
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const buildKey = `${state.hasUserLocation ? 1 : 0}|${state.discoveryRadiusKm}`;
+
+  if (buildKey !== homeListBuildKey) {
+    // Structural change: clear locked order so next pass does a fresh sort
+    homeListBuildKey = buildKey;
+    lockedHomeLayout = null;
+  }
+
+  // ── Path 2: cards present → in-place data patch, order untouched ─────────
+  const existingCards = stationList.querySelectorAll("[data-station-id]");
+  if (existingCards.length > 0) {
+    existingCards.forEach(function (card) {
+      const station = projectedStations.find(function (s) { return s.id === card.dataset.stationId; });
+      if (station) patchCardData(card, station);
+    });
+    showMoreButton.classList.toggle("hidden", !canExpandRadius);
+    return;
+  }
+
+  // ── Path 3: DOM wiped (tab switch back) → rebuild in locked order ─────────
+  if (lockedHomeLayout) {
+    var find = function (id) { return projectedStations.find(function (s) { return s.id === id; }); };
+    var restoredLayout = {
+      heroStation:   lockedHomeLayout.heroId   ? find(lockedHomeLayout.heroId)   : null,
+      backupStation: lockedHomeLayout.backupId ? find(lockedHomeLayout.backupId) : null,
+      nearbyVisible: lockedHomeLayout.nearbyIds.map(find).filter(Boolean),
+      otherStations: lockedHomeLayout.otherIds.map(find).filter(Boolean),
+    };
+    buildHomeDOM(restoredLayout, template, canExpandRadius);
+    // Patch immediately so status reflects current data, not stale first-render data
+    stationList.querySelectorAll("[data-station-id]").forEach(function (card) {
+      var station = projectedStations.find(function (s) { return s.id === card.dataset.stationId; });
+      if (station) patchCardData(card, station);
+    });
+    return;
+  }
+
+  // ── Path 1: first build → sort once, save order, build DOM ───────────────
+  var layout = buildDecisionFirstLayout({
     bestStation,
     backupStation: stationSections.backupStation,
     recommendedStations,
@@ -527,7 +584,23 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
     layout.nearbyVisible = [...recommendedStations, ...nearbyStations, ...avoidStations].slice(0, 5);
   }
 
-  const totalVisibleStations =
+  // Save only IDs — no stale station-object references
+  lockedHomeLayout = {
+    heroId:    layout.heroStation  ? layout.heroStation.id  : null,
+    backupId:  layout.backupStation ? layout.backupStation.id : null,
+    nearbyIds: layout.nearbyVisible.map(function (s) { return s.id; }),
+    otherIds:  layout.otherStations.map(function (s) { return s.id; }),
+  };
+
+  buildHomeDOM(layout, template, canExpandRadius);
+}
+
+// Renders a home-tab layout object into #station-list.
+// Shared by Path 1 (fresh build) and Path 3 (locked-order restore).
+function buildHomeDOM(layout, template, canExpandRadius) {
+  stationList.innerHTML = "";
+
+  var totalVisibleStations =
     (layout.heroStation ? 1 : 0) +
     (layout.backupStation ? 1 : 0) +
     layout.nearbyVisible.length +
@@ -546,23 +619,18 @@ function renderStationList({ stationSections, searchResults, hasSearch, canExpan
   if (layout.heroStation) {
     stationList.append(createHeroSection(layout.heroStation, template));
   }
-
   if (layout.backupStation) {
     stationList.append(createBackupSection(layout.backupStation, template));
   }
-
   if (layout.nearbyVisible.length) {
-    stationList.append(
-      createSectionBlock({
-        title: "محطات قريبة أخرى",
-        tone: "nearby",
-        stations: layout.nearbyVisible,
-        template,
-        variant: "compact",
-      }),
-    );
+    stationList.append(createSectionBlock({
+      title: "محطات قريبة أخرى",
+      tone: "nearby",
+      stations: layout.nearbyVisible,
+      template,
+      variant: "compact",
+    }));
   }
-
   if (layout.otherStations.length) {
     stationList.append(createOtherSectionBlock(layout.otherStations, template));
   }
@@ -1045,6 +1113,25 @@ function fillMetaRow(card, station) {
   card.querySelector("[data-card-updated]").textContent = getStationUpdatedText(station);
 }
 
+// In-place card data update — never touches DOM structure or card position.
+// Called by the locked-order path in renderStationList.
+function patchCardData(card, station) {
+  const displayStatus = getDisplayStatus(station);
+
+  const statusEl = card.querySelector(".station-card-status");
+  if (statusEl) {
+    statusEl.className = "station-card-status";
+    statusEl.classList.add(`station-card-status-${getDisplayStatusTone(displayStatus)}`);
+    statusEl.textContent = displayStatus;
+  }
+
+  const distEl = card.querySelector("[data-card-distance]");
+  if (distEl) distEl.textContent = formatDistanceLabel(station.distanceKm);
+
+  const updEl = card.querySelector("[data-card-updated]");
+  if (updEl) updEl.textContent = getStationUpdatedText(station);
+}
+
 function createMetaRowMarkup(className) {
   return `
     <div class="station-card-meta-row ${className}">
@@ -1184,7 +1271,7 @@ function syncActiveTabUi() {
       ? "ابحث عن المحطة أو المنطقة المناسبة"
       : "اختر المحطة المناسبة وافتحها في خرائط Google";
   listPanelHeading.classList.toggle("hidden", !isSearchTab && !isAccountTab);
-  homeInfoNotice.classList.toggle("hidden", isSearchTab || isAccountTab);
+  homeInfoNotice?.classList.toggle("hidden", isSearchTab || isAccountTab);
 
   searchToolbar.classList.toggle("hidden", !isSearchTab);
   if (!isSearchTab) {
