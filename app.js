@@ -544,7 +544,7 @@ function render() {
     searchResults: searchedStations,
     hasSearch,
     canExpandRadius,
-    projectedStations,
+    projectedStations: enrichedStations,
   });
   renderMap(nearbyBaseStations, stationSections.bestStation);
   renderStationDetails(nearbyBaseStations.find((station) => station.id === state.selectedStationId));
